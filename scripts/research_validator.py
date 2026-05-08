@@ -18,6 +18,7 @@ VALID_STATUSES = {
 }
 REQUIRED_IDS = {
     "project_deep_research_report",
+    "executive_summary_deep_research",
     "latent_network_ica_explorer",
     "virtual_lesion_lab",
     "discrete_stimulus_optimizer",

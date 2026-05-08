@@ -14,6 +14,7 @@ from braindough.artifacts import (
     validate_artifact,
 )
 from braindough.config import discover_experiment_specs, load_experiment_spec
+from braindough.executive_summary import write_executive_summary
 from braindough.report import write_report
 from braindough.runner import run_experiment
 from braindough.storage import BraindoughPaths
@@ -40,6 +41,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     report = subparsers.add_parser("report")
     report.add_argument("run_dir", type=Path)
+
+    executive_summary = subparsers.add_parser("executive-summary")
+    executive_summary.add_argument("--run-dir", action="append", type=Path, default=[])
+    executive_summary.add_argument("--output-dir", type=Path)
+    executive_summary.add_argument("--home", type=Path)
 
     experiments = subparsers.add_parser("experiments")
     experiments_sub = experiments.add_subparsers(
@@ -74,6 +80,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "report":
         md_path, html_path = write_report(args.run_dir)
         print(json.dumps({"report": str(md_path), "html": str(html_path)}, indent=2))
+        return 0
+    if args.command == "executive-summary":
+        paths = write_executive_summary(
+            run_dirs=args.run_dir,
+            output_dir=args.output_dir,
+            home=args.home,
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, indent=2))
         return 0
     if args.command == "experiments":
         for path in discover_experiment_specs():

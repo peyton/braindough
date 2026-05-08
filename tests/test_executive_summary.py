@@ -1,0 +1,277 @@
+import json
+from pathlib import Path
+from typing import Any
+
+from braindough.cli import main
+from braindough.config import is_absolute_local_path
+from braindough.executive_summary import (
+    SUMMARY_SCHEMA_VERSION,
+    discover_latest_run_dirs,
+    write_executive_summary,
+)
+
+
+def test_discover_latest_run_dirs_prefers_latest_target_backend(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    older = _write_run(
+        home,
+        "20260508T010000Z-smoke-fake-perturbation-optimization-fake-old",
+        backend="fake",
+        experiment_id="smoke/fake-perturbation-optimization",
+        completed_at="2026-05-08T01:00:00Z",
+    )
+    newer = _write_run(
+        home,
+        "20260508T020000Z-smoke-fake-perturbation-optimization-fake-new",
+        backend="fake",
+        experiment_id="smoke/fake-perturbation-optimization",
+        completed_at="2026-05-08T02:00:00Z",
+    )
+    tribe = _write_run(
+        home,
+        "20260508T030000Z-local-tribe-v2-perturbation-optimization-tribe-v2",
+        backend="tribe-v2",
+        experiment_id="local/tribe-v2-perturbation-optimization",
+        completed_at="2026-05-08T03:00:00Z",
+        n_stimuli=4,
+        n_responses=1,
+    )
+
+    discovered = discover_latest_run_dirs(home=home)
+
+    assert older not in discovered
+    assert discovered == [newer, tribe]
+
+
+def test_write_executive_summary_outputs_pdf_json_sources_and_figures(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    fake = _write_run(
+        home,
+        "20260508T020000Z-smoke-fake-perturbation-optimization-fake",
+        backend="fake",
+        experiment_id="smoke/fake-perturbation-optimization",
+    )
+    tribe = _write_run(
+        home,
+        "20260508T030000Z-local-tribe-v2-perturbation-optimization-tribe-v2",
+        backend="tribe-v2",
+        experiment_id="local/tribe-v2-perturbation-optimization",
+        n_stimuli=4,
+        n_responses=1,
+    )
+    output = tmp_path / "summary"
+
+    paths = write_executive_summary(
+        run_dirs=[fake, tribe], output_dir=output, home=home
+    )
+
+    summary = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+    assert summary["schema_version"] == SUMMARY_SCHEMA_VERSION
+    assert len(summary["runs"]) == 2
+    assert any("TRIBE" in item["title"] for item in summary["key_findings"])
+    assert not _contains_absolute_local_path(summary)
+    assert paths["pdf"].read_bytes().startswith(b"%PDF")
+    assert paths["pdf"].read_bytes().count(b"/Type /Page") >= 3
+    assert (
+        paths["markdown"]
+        .read_text(encoding="utf-8")
+        .startswith("# Braindough Executive Summary")
+    )
+    for chart in summary["charts"]:
+        assert (output / chart["path"]).is_file()
+    source_ids = {source["id"] for source in summary["sources"]}
+    assert "tribe_v2_model_card" in source_ids
+    assert "natural_scenes_dataset" in source_ids
+
+
+def test_write_executive_summary_discovers_runs_when_not_explicit(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    _write_run(
+        home,
+        "20260508T020000Z-smoke-fake-perturbation-optimization-fake",
+        backend="fake",
+        experiment_id="smoke/fake-perturbation-optimization",
+    )
+
+    paths = write_executive_summary(output_dir=tmp_path / "summary", home=home)
+    summary = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+
+    assert [run["backend"] for run in summary["runs"]] == ["fake"]
+    findings = " ".join(item["claim"] for item in summary["key_findings"])
+    assert "The local TRIBE perturbation/optimization run produced" not in findings
+    assert "No tribe-v2 perturbation/optimization run was loaded" in findings
+
+
+def test_write_executive_summary_finds_research_metadata_outside_cwd(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    home = tmp_path / "home"
+    run = _write_run(
+        home,
+        "20260508T020000Z-smoke-fake-perturbation-optimization-fake",
+        backend="fake",
+        experiment_id="smoke/fake-perturbation-optimization",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    paths = write_executive_summary(
+        run_dirs=[run], output_dir=tmp_path / "summary", home=home
+    )
+    summary = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+
+    source_ids = {source["id"] for source in summary["sources"]}
+    assert "research_capture_executive_summary_deep_research" in source_ids
+
+
+def test_cli_executive_summary_with_explicit_run_dir(
+    tmp_path: Path, capsys: Any
+) -> None:
+    home = tmp_path / "home"
+    run = _write_run(
+        home,
+        "20260508T020000Z-smoke-fake-perturbation-optimization-fake",
+        backend="fake",
+        experiment_id="smoke/fake-perturbation-optimization",
+    )
+    output_dir = tmp_path / "summary"
+
+    assert (
+        main(
+            [
+                "executive-summary",
+                "--run-dir",
+                str(run),
+                "--output-dir",
+                str(output_dir),
+                "--home",
+                str(home),
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert Path(output["pdf"]).is_file()
+    assert Path(output["summary_json"]).is_file()
+
+
+def _write_run(
+    home: Path,
+    run_id: str,
+    *,
+    backend: str,
+    experiment_id: str,
+    completed_at: str = "2026-05-08T02:00:00Z",
+    n_stimuli: int = 6,
+    n_responses: int = 6,
+) -> Path:
+    run_dir = home / "runs" / "2026" / "05" / run_id
+    table_dir = run_dir / "outputs" / "tables"
+    table_dir.mkdir(parents=True)
+    suite_responses = max(1, n_responses // 2)
+    suite_summary = {
+        "latent_network_ica_explorer": {
+            "stimuli": max(1, n_stimuli // 2),
+            "responses": min(suite_responses, n_responses),
+        },
+        "discrete_stimulus_optimizer": {
+            "stimuli": max(1, n_stimuli - max(1, n_stimuli // 2)),
+            "responses": max(0, n_responses - min(suite_responses, n_responses)),
+        },
+    }
+    manifest = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "status": "completed",
+        "created_at": "2026-05-08T01:00:00Z",
+        "completed_at": completed_at,
+        "config": {"experiment_id": experiment_id},
+        "backend": {"name": backend},
+        "inputs": [{"id": f"stimulus:{index}"} for index in range(n_stimuli)],
+        "outputs": [],
+        "blocker": None,
+    }
+    metrics = {
+        "schema_version": "braindough.artifact.v1",
+        "backend": backend,
+        "n_stimuli": n_stimuli,
+        "n_responses": n_responses,
+        "suite_summary": suite_summary,
+        "mean_abs_activation": 0.12,
+        "mean_abs_activation_by_stimulus": {
+            "latent_network_ica_explorer:base": 0.12,
+            "discrete_stimulus_optimizer:candidate_00": 0.18,
+        },
+        "optimization": {
+            "best_candidate_id": "discrete_stimulus_optimizer:candidate_00",
+            "best_score": 0.18,
+            "best_mean_abs_activation": 0.18,
+            "n_candidates": max(1, n_responses // 2),
+            "objective": "mean_abs_activation_minus_similarity_penalty",
+            "stopping_reason": (
+                "prediction_budget_reached"
+                if backend == "tribe-v2"
+                else "candidate_budget_exhausted"
+            ),
+        },
+        "latent_components": {
+            "status": "insufficient_samples" if backend == "tribe-v2" else "computed",
+            "n_components": 0 if backend == "tribe-v2" else 2,
+        },
+        "n_optimizer_candidates": max(1, n_responses // 2),
+        "n_perturbation_comparisons": 0 if backend == "tribe-v2" else 2,
+        "top_activation_stimuli": [
+            {
+                "stimulus_id": "discrete_stimulus_optimizer:candidate_00",
+                "mean_abs_activation": 0.18,
+            }
+        ],
+        "attempted_predictions": n_responses if backend == "tribe-v2" else None,
+        "max_predictions": n_responses if backend == "tribe-v2" else None,
+    }
+    (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    (table_dir / "optimization_history.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "step": 0,
+                        "stimulus_id": "discrete_stimulus_optimizer:candidate_00",
+                        "objective_score": 0.18,
+                        "best_score_so_far": 0.18,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "step": 1,
+                        "stimulus_id": "discrete_stimulus_optimizer:candidate_01",
+                        "objective_score": 0.14,
+                        "best_score_so_far": 0.18,
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (table_dir / "objectives.json").write_text(
+        json.dumps(metrics["optimization"]), encoding="utf-8"
+    )
+    return run_dir
+
+
+def _contains_absolute_local_path(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(_contains_absolute_local_path(child) for child in value.values())
+    if isinstance(value, list):
+        return any(_contains_absolute_local_path(child) for child in value)
+    if isinstance(value, str):
+        return is_absolute_local_path(value)
+    return False

@@ -71,6 +71,7 @@ The implementation should expose:
 
     just artifact-validate RUN_DIR="$BRAINDOUGH_HOME/runs/YYYY/MM/<run_id>"
     just report RUN_DIR="$BRAINDOUGH_HOME/runs/YYYY/MM/<run_id>"
+    just executive-summary
 
 `just artifact-validate` fails when required files are missing, schema versions
 are wrong, output paths are not relative, hashes do not match, a completed run
@@ -101,3 +102,33 @@ TRIBE v2 predictions are model predictions, not measurements. Figures and CSVs
 must label them as predicted neural responses. When comparing suites, include
 the same model revision and inference settings in every manifest before drawing
 scientific conclusions.
+
+## Executive Summary Exports
+
+Executive summaries are generated reports across one or more run artifacts.
+They are local outputs and should stay under external storage, normally:
+
+    $BRAINDOUGH_HOME/reports/YYYY/MM/<timestamp>-executive-summary/
+      executive-summary.pdf
+      executive-summary.md
+      executive-summary.json
+      sources.json
+      figures/
+        suite_response_coverage.png
+        mean_abs_by_suite.png
+        optimizer_trace.png
+        artifact_capability_comparison.png
+
+Run discovery defaults to the latest fake and TRIBE perturbation/optimization
+runs. The JSON file is intentionally path-neutral: it contains run IDs, backend
+names, experiment IDs, chart-relative paths, source URLs, and scalar metrics,
+but not machine-local run paths.
+
+Use explicit run directories when comparing a specific pair:
+
+    just executive-summary RUN_DIRS="$FAKE_RUN|$TRIBE_RUN"
+
+The separator is `|` so paths under `/Volumes/Virtual Machine HD/...` can keep
+their spaces. The PDF must distinguish fake-backend software validation from
+TRIBE model-predicted responses and must not describe model predictions as
+measured human data.
