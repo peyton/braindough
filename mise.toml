@@ -1,0 +1,18 @@
+[tools]
+python = "3.12.13"
+uv = "0.11.11"
+just = "1.50.0"
+hk = "1.45.0"
+pkl = "0.31.1"
+ruff = "0.15.12"
+actionlint = "1.7.12"
+zizmor = "1.24.1"
+shellcheck = "0.11.0"
+shfmt = "3.13.1"
+typos = "1.46.0"
+node = "22.22.2"
+"npm:pyright" = "1.1.409"
+
+[settings]
+experimental = true
+lockfile = true

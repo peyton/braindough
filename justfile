@@ -1,0 +1,61 @@
+#!/usr/bin/env -S just --working-directory . --justfile
+
+[private]
+@default:
+    just --list
+
+bootstrap:
+    mise install --locked
+    mise exec -- uv sync --python 3.12.13 --all-packages
+    mise exec -- hk install
+
+fmt:
+    mise exec -- ruff format packages scripts tests
+    mise exec -- ruff check --fix packages scripts tests
+    if ls scripts/*.sh >/dev/null 2>&1; then mise exec -- shfmt -w scripts/*.sh; fi
+
+fmt-check:
+    mise exec -- ruff format --check packages scripts tests
+    if ls scripts/*.sh >/dev/null 2>&1; then mise exec -- shfmt -d scripts/*.sh; fi
+
+lint:
+    mise exec -- ruff check packages scripts tests
+    mise exec -- actionlint
+    env -u GITHUB_TOKEN -u GH_TOKEN -u ZIZMOR_GITHUB_TOKEN mise exec -- zizmor --no-progress .github/workflows
+
+typecheck:
+    mise exec -- pyright
+
+test:
+    mise exec -- uv run --python 3.12.13 pytest
+
+check: fmt-check lint typecheck test artifact-validate
+
+ci: bootstrap check run-fake
+
+doctor:
+    mise exec -- uv run --python 3.12.13 braindough doctor
+
+storage-init:
+    mise exec -- uv run --python 3.12.13 braindough storage init
+
+storage-doctor:
+    mise exec -- uv run --python 3.12.13 braindough storage doctor
+
+run-fake:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_first_suite.yaml
+
+run-tribe:
+    mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_first_suite.yaml
+
+artifact-validate RUN_DIR='':
+    run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \
+        if [ -n "$run_dir" ]; then \
+            mise exec -- uv run --python 3.12.13 braindough validate "$run_dir"; \
+        else \
+            mise exec -- uv run --python 3.12.13 braindough validate --fixture; \
+        fi
+
+report RUN_DIR:
+    run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \
+        mise exec -- uv run --python 3.12.13 braindough report "$run_dir"
