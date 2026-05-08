@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-05-08T22:14:09Z",
+  "id": "executive_summary_deep_research",
+  "prompt": "Use GPT-5.5 Pro Extended Thinking to write the best possible ChatGPT Deep Research prompt, then run ChatGPT Deep Research to produce an executive-summary PDF for research leads evaluating Braindough, a local-first Python uv/mise/hk/just monorepo for in-silico brain-modeling experiments using Meta/Facebook TRIBE v2 and fake-backend simulations. The report must synthesize local fake and bounded TRIBE perturbation/optimization artifacts, repository structure, TRIBE v2 and encoding-model literature, natural-scene benchmarks, counterfactual and minimal-edit stimulus generation, virtual lesion and ablation analysis, closed-loop activation optimization, semantic maps, audiovisual integration, key findings, limitations, recommended charts, and future directions. It must distinguish fake-backend software-validation artifacts and TRIBE model-predicted responses from measured human neural data, respect the external storage root, avoid overclaiming, cite sources, and provide a polished PDF plus source and evidence-gap notes.",
+  "source": {
+    "kind": "chatgpt_deep_research",
+    "model_selector": "Deep research with Pro",
+    "prompt_draft_url": "https://chatgpt.com/c/69fe5ca0-6534-83e8-9361-9ca4e7f05049",
+    "url": "https://chatgpt.com/c/69fe5de6-f20c-83e8-ba0c-dfca5e3edd72",
+    "visible_status": "In progress; current visible step is artifact inventory and provenance extraction; 174 searches visible."
+  },
+  "status": "in_progress",
+  "title": "Braindough Executive Summary Deep Research"
+}

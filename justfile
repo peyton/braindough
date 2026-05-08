@@ -68,3 +68,15 @@ research-validate:
 report RUN_DIR:
     run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \
         mise exec -- uv run --python 3.12.13 braindough report "$run_dir"
+
+executive-summary RUN_DIRS='' OUTPUT_DIR='':
+    run_dirs="{{RUN_DIRS}}"; run_dirs="${run_dirs#RUN_DIRS=}"; \
+        output_dir="{{OUTPUT_DIR}}"; output_dir="${output_dir#OUTPUT_DIR=}"; \
+        set --; \
+        if [ -n "$run_dirs" ]; then \
+            old_ifs="$IFS"; IFS='|'; \
+            for run_dir in $run_dirs; do set -- "$@" --run-dir "$run_dir"; done; \
+            IFS="$old_ifs"; \
+        fi; \
+        if [ -n "$output_dir" ]; then set -- "$@" --output-dir "$output_dir"; fi; \
+        mise exec -- uv run --python 3.12.13 braindough executive-summary "$@"

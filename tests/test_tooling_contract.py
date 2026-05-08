@@ -30,6 +30,7 @@ def test_justfile_exposes_required_targets() -> None:
         "artifact-validate",
         "research-validate:",
         "report RUN_DIR:",
+        "executive-summary RUN_DIRS='' OUTPUT_DIR='':",
     ]
 
     for target in required:
