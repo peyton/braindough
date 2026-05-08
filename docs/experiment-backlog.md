@@ -87,6 +87,12 @@ Command:
 
     just run-fake-optimization
     just run-tribe-optimization
+    just run-fake-lesion
+    just run-fake-optimizer
+    just run-fake-counterfactual
+    just run-tribe-lesion
+    just run-tribe-optimizer
+    just run-tribe-counterfactual
 
 Acceptance: outputs include `latent_components.csv`, `latent_loadings.csv`, and
 an `insufficient_samples` component row when fewer than two predictions are
@@ -98,7 +104,9 @@ Purpose: compare baseline stimuli with v1 stimulus-factor lesions without
 claiming internal model ablation.
 
 Acceptance: outputs include parent/lesion response deltas and correlations in
-`perturbation_comparisons.csv`; model-internal layer ablation remains deferred.
+`perturbation_comparisons.csv`, plus lesion provenance, lesion-specific
+comparisons, atlas-free vertex summaries, delta arrays, and PDF/report figures;
+model-internal layer ablation remains deferred.
 
 ### `discrete_stimulus_optimizer`
 
@@ -106,7 +114,8 @@ Purpose: run a deterministic finite search over generated candidates and rank
 them by a response objective with a diversity penalty.
 
 Acceptance: outputs include `optimization_history.jsonl`, `objectives.json`,
-and a report summary naming the best candidates and stopping reason.
+`candidate_catalog.jsonl`, and a report summary naming the best candidates,
+objective version, evaluated/skipped status counts, and stopping reason.
 
 ### `counterfactual_editing_workbench`
 
@@ -114,7 +123,9 @@ Purpose: create replayable paired minimal edits and quantify predicted-response
 deltas between each base stimulus and edit.
 
 Acceptance: every edit has parent/pair metadata, and pair deltas appear in the
-common perturbation comparison table.
+common perturbation comparison table plus `counterfactual_edits.jsonl` and
+`counterfactual_pairs.csv`, including edit magnitude metrics and incomplete-pair
+status for bounded TRIBE runs.
 
 ## Deferred Ideas
 

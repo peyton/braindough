@@ -501,12 +501,25 @@ def _optimizer_trace_chart(
     plotted = False
     for bundle in bundles:
         rows = bundle.tables.get("optimization_history", [])
-        if not rows:
+        evaluated_rows = [
+            row
+            for row in rows
+            if row.get("status", "evaluated") == "evaluated"
+            and _float_or_none(row.get("objective_score")) is not None
+            and _float_or_none(row.get("best_score_so_far")) is not None
+        ]
+        if not evaluated_rows:
             continue
         plotted = True
-        steps = [int(row.get("step", index)) for index, row in enumerate(rows)]
-        best = [float(row.get("best_score_so_far", 0.0)) for row in rows]
-        score = [float(row.get("objective_score", 0.0)) for row in rows]
+        steps = [
+            int(row.get("step", index)) for index, row in enumerate(evaluated_rows)
+        ]
+        best = [
+            _float_value(row.get("best_score_so_far"), 0.0) for row in evaluated_rows
+        ]
+        score = [
+            _float_value(row.get("objective_score"), 0.0) for row in evaluated_rows
+        ]
         ax.plot(
             steps, score, marker="o", linewidth=1.2, label=f"{bundle.backend} score"
         )
@@ -531,6 +544,20 @@ def _optimizer_trace_chart(
         "interpretation": "Use stopping reason with trace shape before claiming convergence.",
         "caveat": "Bounded TRIBE traces can stop because of prediction budget.",
     }
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        if value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_value(value: Any, default: float) -> float:
+    parsed = _float_or_none(value)
+    return default if parsed is None else parsed
 
 
 def _capability_chart(

@@ -32,12 +32,23 @@ class FakeBackend:
         events: list[dict[str, object]] = []
 
         for stimulus in stimuli:
-            responses[stimulus.stimulus_id] = self._response(
+            response = self._response(
                 stimulus=stimulus,
                 seed=spec.seed,
                 timesteps=timesteps,
                 vertices=vertices,
             )
+            parent_id = str(stimulus.metadata.get("parent_id", ""))
+            if parent_id in responses and stimulus.suite in {
+                "virtual_lesion_lab",
+                "counterfactual_editing_workbench",
+            }:
+                response = self._paired_response(
+                    stimulus=stimulus,
+                    parent=responses[parent_id],
+                    fallback=response,
+                )
+            responses[stimulus.stimulus_id] = response
             events.append(
                 {
                     "event": "prediction",
@@ -85,4 +96,53 @@ class FakeBackend:
         response += (suite_gain + modality_offset) * temporal * spatial
         if "blank" in stimulus.kind or stimulus.kind == "silence":
             response *= 0.15
+        if stimulus.suite == "discrete_stimulus_optimizer":
+            index = int(stimulus.metadata.get("candidate_index", 0))
+            shape = str(stimulus.metadata.get("params", {}).get("shape", ""))
+            shape_gain = {
+                "circle": 0.02,
+                "square": 0.04,
+                "triangle": 0.08,
+                "stripe": 0.12,
+            }
+            response += (shape_gain.get(shape, 0.0) + 0.005 * index) * spatial
         return response
+
+    @staticmethod
+    def _paired_response(
+        stimulus: Stimulus, parent: np.ndarray, fallback: np.ndarray
+    ) -> np.ndarray:
+        kind = str(
+            stimulus.metadata.get("lesion_base_type")
+            or stimulus.metadata.get("edit_base_type")
+            or stimulus.kind
+        )
+        strength = _metadata_float(stimulus.metadata.get("strength", 1.0), default=1.0)
+        scale = {
+            "sham_reencode": 0.01,
+            "low_contrast": 0.04,
+            "local_blur": 0.05,
+            "blur_suppression": 0.06,
+            "background_lighten": 0.07,
+            "color_swap": 0.08,
+            "mask_left": 0.11,
+            "mask_right": 0.11,
+            "central_occlusion": 0.14,
+            "object_mask": 0.16,
+            "random_patch_same_area": 0.18,
+            "tile_scramble": 0.22,
+            "blank_suppression": 0.26,
+        }.get(kind, 0.1)
+        delta = fallback - np.mean(fallback, dtype=np.float32)
+        return (parent + delta * np.float32(scale * max(strength, 0.0))).astype(
+            np.float32
+        )
+
+
+def _metadata_float(value: object, *, default: float) -> float:
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default

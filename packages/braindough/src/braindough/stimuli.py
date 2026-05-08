@@ -10,9 +10,9 @@ from typing import Any
 
 import imageio.v2 as imageio
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
-from braindough.storage import sha256_file
+from braindough.storage import sha256_file, sha256_text
 from braindough.suites import validate_suite_names
 
 IMAGE_SIZE = 256
@@ -361,9 +361,22 @@ def _virtual_lesion_stimuli(
     rng: np.random.Generator,
     config: dict[str, Any],
 ) -> list[Stimulus]:
-    del rng, config
     stimuli: list[Stimulus] = []
-    for base_id, image_path in list(base_images.items())[:2]:
+    base_count = _config_int(config, "virtual_lesion_base_count", default=2, limit=8)
+    lesion_types = _config_list(
+        config,
+        "virtual_lesion_types",
+        default=[
+            "mask_left",
+            "mask_right",
+            "central_occlusion",
+            "low_contrast",
+            "blur_suppression",
+            "blank_suppression",
+        ],
+    )
+    strengths = _config_float_list(config, "lesion_strengths", default=[1.0])
+    for base_id, image_path in list(base_images.items())[:base_count]:
         source = Image.open(image_path).convert("RGB")
         baseline_id = f"virtual_lesion_lab:{base_id}:baseline"
         baseline_path = output_dir / "virtual_lesion_lab" / f"{base_id}-baseline.png"
@@ -386,7 +399,14 @@ def _virtual_lesion_stimuli(
                 },
             )
         )
-        for lesion_id, lesioned in _lesion_images(source).items():
+        for lesion_id, lesioned, lesion_metadata in _lesion_images(
+            source,
+            rng,
+            lesion_types=lesion_types,
+            strengths=strengths,
+            masks_dir=output_dir / "virtual_lesion_lab" / "masks",
+            base_id=base_id,
+        ):
             lesion_path = (
                 output_dir / "virtual_lesion_lab" / f"{base_id}-{lesion_id}.png"
             )
@@ -408,6 +428,8 @@ def _virtual_lesion_stimuli(
                         "lesion_type": lesion_id,
                         "role": "stimulus_lesion",
                         "intervention_family": "stimulus_factor_lesion",
+                        "source_image_sha256": sha256_file(baseline_path),
+                        **lesion_metadata,
                     },
                 )
             )
@@ -435,6 +457,12 @@ def _discrete_optimizer_stimuli(
         shape = shapes[idx % len(shapes)]
         foreground, background = palettes[(idx // len(shapes)) % len(palettes)]
         angle = int(rng.integers(0, 360))
+        params = {
+            "shape": shape,
+            "foreground_rgb": list(foreground),
+            "background_rgb": list(background),
+            "angle_degrees": angle,
+        }
         image = _candidate_image(shape, foreground, background, angle)
         image_path = (
             output_dir / "discrete_stimulus_optimizer" / f"candidate-{idx:02d}.png"
@@ -455,12 +483,9 @@ def _discrete_optimizer_stimuli(
                     "candidate_index": idx,
                     "optimizer_candidate": True,
                     "objective": "mean_abs_activation_minus_similarity_penalty",
-                    "params": {
-                        "shape": shape,
-                        "foreground_rgb": list(foreground),
-                        "background_rgb": list(background),
-                        "angle_degrees": angle,
-                    },
+                    "params": params,
+                    "param_hash": _stable_hash(params),
+                    "generation_policy": "shape_palette_angle_grid_v1",
                 },
             )
         )
@@ -473,9 +498,21 @@ def _counterfactual_stimuli(
     rng: np.random.Generator,
     config: dict[str, Any],
 ) -> list[Stimulus]:
-    del rng, config
+    del rng
     stimuli: list[Stimulus] = []
-    for base_id, image_path in list(base_images.items())[:2]:
+    base_count = _config_int(config, "counterfactual_base_count", default=2, limit=8)
+    edit_types = _config_list(
+        config,
+        "counterfactual_edit_types",
+        default=[
+            "color_swap",
+            "local_blur",
+            "background_lighten",
+            "object_mask",
+            "tile_scramble",
+        ],
+    )
+    for base_id, image_path in list(base_images.items())[:base_count]:
         source = Image.open(image_path).convert("RGB")
         baseline_id = f"counterfactual_editing_workbench:{base_id}:baseline"
         baseline_path = (
@@ -500,7 +537,9 @@ def _counterfactual_stimuli(
                 },
             )
         )
-        for edit_id, edited in _counterfactual_edits(source).items():
+        for edit_id, edited, edit_metadata in _counterfactual_edits(
+            source, edit_types=edit_types
+        ):
             edit_path = (
                 output_dir
                 / "counterfactual_editing_workbench"
@@ -524,6 +563,9 @@ def _counterfactual_stimuli(
                         "pair_id": base_id,
                         "edit_type": edit_id,
                         "role": "counterfactual_edit",
+                        "edit_version": "rule_based_v1",
+                        "source_image_sha256": sha256_file(baseline_path),
+                        **edit_metadata,
                     },
                 )
             )
@@ -638,26 +680,147 @@ def _perturbations(
     }
 
 
-def _lesion_images(image: Image.Image) -> dict[str, Image.Image]:
+def _lesion_images(
+    image: Image.Image,
+    rng: np.random.Generator,
+    *,
+    lesion_types: list[str],
+    strengths: list[float],
+    masks_dir: Path,
+    base_id: str,
+) -> list[tuple[str, Image.Image, dict[str, Any]]]:
+    fill = (127, 127, 127)
+    variants: list[tuple[str, Image.Image, dict[str, Any]]] = []
+    masks_dir.mkdir(parents=True, exist_ok=True)
+
+    for lesion_type in lesion_types:
+        if lesion_type == "sham_reencode":
+            variants.append(
+                (
+                    lesion_type,
+                    image.copy(),
+                    {
+                        "lesion_base_type": lesion_type,
+                        "strength": 0.0,
+                        "masked_fraction": 0.0,
+                        "fill_rgb": list(fill),
+                        "bbox": "",
+                        "mask_sha256": "",
+                        "mask_path": "",
+                    },
+                )
+            )
+            continue
+
+        for strength in strengths:
+            strength = min(max(float(strength), 0.0), 1.0)
+            lesion_id = (
+                lesion_type
+                if len(strengths) == 1
+                else f"{lesion_type}_s{round(strength * 100):03d}"
+            )
+            lesioned, mask, bbox = _apply_lesion(
+                image=image,
+                lesion_type=lesion_type,
+                strength=strength,
+                fill=fill,
+                rng=rng,
+            )
+            mask_path = masks_dir / f"{base_id}-{lesion_id}-mask.png"
+            _save_image(mask, mask_path)
+            variants.append(
+                (
+                    lesion_id,
+                    lesioned,
+                    {
+                        "lesion_base_type": lesion_type,
+                        "strength": strength,
+                        "masked_fraction": _mask_fraction(mask),
+                        "fill_rgb": list(fill),
+                        "bbox": list(bbox) if bbox else "",
+                        "mask_sha256": sha256_file(mask_path),
+                        "mask_path": mask_path,
+                    },
+                )
+            )
+    return variants
+
+
+def _apply_lesion(
+    image: Image.Image,
+    lesion_type: str,
+    strength: float,
+    fill: tuple[int, int, int],
+    rng: np.random.Generator,
+) -> tuple[Image.Image, Image.Image, tuple[int, int, int, int] | None]:
     size = IMAGE_SIZE
-    images: dict[str, Image.Image] = {}
+    mask = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(mask)
+    bbox: tuple[int, int, int, int] | None = None
 
-    left = image.copy()
-    ImageDraw.Draw(left).rectangle((0, 0, size // 2, size), fill=(127, 127, 127))
-    images["mask_left"] = left
+    if lesion_type == "mask_left":
+        width = max(1, int((size // 2) * strength))
+        bbox = (0, 0, width, size)
+        draw.rectangle(bbox, fill=255)
+    elif lesion_type == "mask_right":
+        width = max(1, int((size // 2) * strength))
+        bbox = (size - width, 0, size, size)
+        draw.rectangle(bbox, fill=255)
+    elif lesion_type == "central_occlusion":
+        radius = max(1, int(52 * strength))
+        bbox = (
+            size // 2 - radius,
+            size // 2 - radius,
+            size // 2 + radius,
+            size // 2 + radius,
+        )
+        draw.ellipse(bbox, fill=255)
+    elif lesion_type == "random_patch_same_area":
+        side = max(16, int(96 * max(strength, 0.2)))
+        x = int(rng.integers(0, max(size - side, 1)))
+        y = int(rng.integers(0, max(size - side, 1)))
+        bbox = (x, y, x + side, y + side)
+        draw.rectangle(bbox, fill=255)
+    elif lesion_type in {"low_contrast", "blur_suppression", "blank_suppression"}:
+        bbox = (0, 0, size, size)
+        draw.rectangle(bbox, fill=255)
 
-    right = image.copy()
-    ImageDraw.Draw(right).rectangle((size // 2, 0, size, size), fill=(127, 127, 127))
-    images["mask_right"] = right
+    if lesion_type == "low_contrast":
+        contrast_factor = max(0.05, 1.0 - 0.75 * strength)
+        return ImageEnhance.Contrast(image).enhance(contrast_factor), mask, bbox
+    if lesion_type == "blur_suppression":
+        return (
+            image.filter(ImageFilter.GaussianBlur(radius=2 + 8 * strength)),
+            mask,
+            bbox,
+        )
+    if lesion_type == "blank_suppression":
+        return (
+            Image.blend(image, Image.new("RGB", (size, size), fill), strength),
+            mask,
+            bbox,
+        )
+    if lesion_type == "random_patch_same_area" and bbox:
+        source = image.copy()
+        sx = int(rng.integers(0, max(size - (bbox[2] - bbox[0]), 1)))
+        sy = int(rng.integers(0, max(size - (bbox[3] - bbox[1]), 1)))
+        patch = source.crop(
+            (sx, sy, sx + (bbox[2] - bbox[0]), sy + (bbox[3] - bbox[1]))
+        )
+        target = image.copy()
+        target.paste(patch, (bbox[0], bbox[1]))
+        return target, mask, bbox
+    if bbox:
+        target = image.copy()
+        overlay = Image.new("RGB", (size, size), fill)
+        target.paste(Image.blend(target, overlay, strength), mask=mask)
+        return target, mask, bbox
+    raise ValueError(f"Unknown virtual lesion type: {lesion_type}")
 
-    center = image.copy()
-    ImageDraw.Draw(center).ellipse((76, 76, 180, 180), fill=(127, 127, 127))
-    images["central_occlusion"] = center
 
-    images["low_contrast"] = ImageOps.autocontrast(image, cutoff=35)
-    images["blur_suppression"] = image.filter(ImageFilter.GaussianBlur(radius=9))
-    images["blank_suppression"] = Image.new("RGB", (size, size), (127, 127, 127))
-    return images
+def _mask_fraction(mask: Image.Image) -> float:
+    arr = np.asarray(mask, dtype=np.float32)
+    return float(np.count_nonzero(arr) / arr.size)
 
 
 def _candidate_image(
@@ -680,7 +843,9 @@ def _candidate_image(
     return image.rotate(angle, resample=Image.Resampling.BICUBIC)
 
 
-def _counterfactual_edits(image: Image.Image) -> dict[str, Image.Image]:
+def _counterfactual_edits(
+    image: Image.Image, *, edit_types: list[str]
+) -> list[tuple[str, Image.Image, dict[str, Any]]]:
     arr = np.asarray(image.convert("RGB"))
     swapped = Image.fromarray(arr[:, :, [2, 1, 0]])
 
@@ -710,13 +875,105 @@ def _counterfactual_edits(image: Image.Image) -> dict[str, Image.Image]:
         x = (idx % 4) * 64
         scrambled[y : y + 64, x : x + 64] = tile
 
-    return {
+    edits = {
         "color_swap": swapped,
         "local_blur": local_blur,
         "background_lighten": background_lighten,
         "object_mask": object_mask,
         "tile_scramble": Image.fromarray(scrambled),
     }
+    variants: list[tuple[str, Image.Image, dict[str, Any]]] = []
+    for edit_type in edit_types:
+        if edit_type not in edits:
+            raise ValueError(f"Unknown counterfactual edit type: {edit_type}")
+        edited = edits[edit_type]
+        variants.append(
+            (
+                edit_type,
+                edited,
+                {
+                    "edit_base_type": edit_type,
+                    "semantic_class": _counterfactual_semantic_class(edit_type),
+                    **_image_delta_metrics(image, edited),
+                },
+            )
+        )
+    return variants
+
+
+def _counterfactual_semantic_class(edit_type: str) -> str:
+    meaning_changing = {"object_mask", "tile_scramble"}
+    return "meaning_changing" if edit_type in meaning_changing else "low_level"
+
+
+def _image_delta_metrics(source: Image.Image, edited: Image.Image) -> dict[str, Any]:
+    left = np.asarray(source.convert("RGB"), dtype=np.float32)
+    right = np.asarray(edited.convert("RGB"), dtype=np.float32)
+    diff = np.abs(right - left)
+    changed = np.any(diff > 0, axis=2)
+    if np.any(changed):
+        ys, xs = np.nonzero(changed)
+        bbox: list[int] | str = [
+            int(xs.min()),
+            int(ys.min()),
+            int(xs.max()) + 1,
+            int(ys.max()) + 1,
+        ]
+    else:
+        bbox = ""
+    return {
+        "changed_pixel_fraction": float(np.count_nonzero(changed) / changed.size),
+        "mean_rgb_l1": float(np.mean(diff)),
+        "mean_rgb_l2": float(np.sqrt(np.mean(diff**2))),
+        "edge_change_score": _edge_change_score(source, edited),
+        "edit_bbox": bbox,
+    }
+
+
+def _edge_change_score(source: Image.Image, edited: Image.Image) -> float:
+    left = np.asarray(
+        source.convert("L").filter(ImageFilter.FIND_EDGES), dtype=np.float32
+    )
+    right = np.asarray(
+        edited.convert("L").filter(ImageFilter.FIND_EDGES), dtype=np.float32
+    )
+    return float(np.mean(np.abs(right - left)))
+
+
+def _config_int(config: dict[str, Any], key: str, *, default: int, limit: int) -> int:
+    try:
+        value = int(config.get(key, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(value, limit))
+
+
+def _config_list(config: dict[str, Any], key: str, *, default: list[str]) -> list[str]:
+    raw = config.get(key, default)
+    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+        return list(default)
+    return list(raw) or list(default)
+
+
+def _config_float_list(
+    config: dict[str, Any], key: str, *, default: list[float]
+) -> list[float]:
+    raw = config.get(key, default)
+    if not isinstance(raw, list):
+        return list(default)
+    values: list[float] = []
+    for item in raw:
+        try:
+            values.append(float(item))
+        except (TypeError, ValueError):
+            continue
+    return values or list(default)
+
+
+def _stable_hash(payload: dict[str, Any]) -> str:
+    import json
+
+    return sha256_text(json.dumps(payload, sort_keys=True))
 
 
 def _save_image(image: Image.Image, path: Path) -> None:

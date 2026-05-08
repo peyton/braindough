@@ -161,6 +161,54 @@ def test_cli_executive_summary_with_explicit_run_dir(
     assert Path(output["summary_json"]).is_file()
 
 
+def test_executive_summary_handles_skipped_optimizer_rows(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    run = _write_run(
+        home,
+        "20260508T020000Z-smoke-fake-perturbation-optimization-fake",
+        backend="fake",
+        experiment_id="smoke/fake-perturbation-optimization",
+        include_skipped_optimizer_row=True,
+    )
+
+    paths = write_executive_summary(
+        run_dirs=[run], output_dir=tmp_path / "summary", home=home
+    )
+    summary = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+
+    optimizer_chart = next(
+        chart
+        for chart in summary["charts"]
+        if chart["path"] == "figures/optimizer_trace.png"
+    )
+    assert (tmp_path / "summary" / optimizer_chart["path"]).is_file()
+
+
+def test_executive_summary_handles_backend_error_optimizer_rows(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    run = _write_run(
+        home,
+        "20260508T030000Z-local-tribe-v2-perturbation-optimization-tribe-v2",
+        backend="tribe-v2",
+        experiment_id="local/tribe-v2-perturbation-optimization",
+        include_backend_error_optimizer_row=True,
+    )
+
+    paths = write_executive_summary(
+        run_dirs=[run], output_dir=tmp_path / "summary", home=home
+    )
+    summary = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+
+    optimizer_chart = next(
+        chart
+        for chart in summary["charts"]
+        if chart["path"] == "figures/optimizer_trace.png"
+    )
+    assert (tmp_path / "summary" / optimizer_chart["path"]).is_file()
+
+
 def _write_run(
     home: Path,
     run_id: str,
@@ -170,6 +218,8 @@ def _write_run(
     completed_at: str = "2026-05-08T02:00:00Z",
     n_stimuli: int = 6,
     n_responses: int = 6,
+    include_skipped_optimizer_row: bool = False,
+    include_backend_error_optimizer_row: bool = False,
 ) -> Path:
     run_dir = home / "runs" / "2026" / "05" / run_id
     table_dir = run_dir / "outputs" / "tables"
@@ -237,29 +287,42 @@ def _write_run(
     }
     (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    if include_backend_error_optimizer_row:
+        second_row = {
+            "step": 1,
+            "stimulus_id": "discrete_stimulus_optimizer:candidate_01",
+            "status": "backend_error",
+            "objective_score": "",
+            "best_score_so_far": "",
+        }
+    elif include_skipped_optimizer_row:
+        second_row = {
+            "step": 1,
+            "stimulus_id": "discrete_stimulus_optimizer:candidate_01",
+            "status": "skipped_prediction_budget",
+            "objective_score": "",
+            "best_score_so_far": "",
+        }
+    else:
+        second_row = {
+            "step": 1,
+            "stimulus_id": "discrete_stimulus_optimizer:candidate_01",
+            "status": "evaluated",
+            "objective_score": 0.14,
+            "best_score_so_far": 0.18,
+        }
+    history_rows = [
+        {
+            "step": 0,
+            "stimulus_id": "discrete_stimulus_optimizer:candidate_00",
+            "status": "evaluated",
+            "objective_score": 0.18,
+            "best_score_so_far": 0.18,
+        },
+        second_row,
+    ]
     (table_dir / "optimization_history.jsonl").write_text(
-        "\n".join(
-            [
-                json.dumps(
-                    {
-                        "step": 0,
-                        "stimulus_id": "discrete_stimulus_optimizer:candidate_00",
-                        "objective_score": 0.18,
-                        "best_score_so_far": 0.18,
-                    }
-                ),
-                json.dumps(
-                    {
-                        "step": 1,
-                        "stimulus_id": "discrete_stimulus_optimizer:candidate_01",
-                        "objective_score": 0.14,
-                        "best_score_so_far": 0.18,
-                    }
-                ),
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
+        "\n".join(json.dumps(row) for row in history_rows) + "\n", encoding="utf-8"
     )
     (table_dir / "objectives.json").write_text(
         json.dumps(metrics["optimization"]), encoding="utf-8"

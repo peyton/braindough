@@ -90,10 +90,21 @@ Command surface:
 
     just run-fake-optimization
     just run-tribe-optimization
+    just run-fake-lesion
+    just run-fake-optimizer
+    just run-fake-counterfactual
+    just run-tribe-lesion
+    just run-tribe-optimizer
+    just run-tribe-counterfactual
 
 All four suites use the same artifact contract. New sidecar tables live under
 `outputs/tables/` and remain small enough to commit only as generated run
 artifacts outside the repository.
+
+The focused fake targets are part of `just ci` so each suite-specific artifact
+contract is checked on every pull request. The focused TRIBE targets remain
+opt-in because they may download large model assets and can take minutes per
+prediction.
 
 ## Repo Commands
 
@@ -109,11 +120,18 @@ The implementation should expose these repo-local commands:
     just ci
     just run-fake
     just run-fake-optimization
+    just run-fake-lesion
+    just run-fake-optimizer
+    just run-fake-counterfactual
     just run-tribe
     just run-tribe-optimization
+    just run-tribe-lesion
+    just run-tribe-optimizer
+    just run-tribe-counterfactual
     just research-validate
     just artifact-validate RUN_DIR=<run-dir>
     just report RUN_DIR=<run-dir>
+    just executive-summary RUN_DIRS=<run-dir>|<run-dir> OUTPUT_DIR=<output-dir>
 
 `just bootstrap` uses `mise` and `uv` with declared dependencies only. Runtime
 code must not install dependencies implicitly, write heavy outputs outside

@@ -1,6 +1,8 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from braindough.stimuli import generate_stimuli
 
@@ -70,6 +72,76 @@ def test_generate_perturbation_optimization_stimuli_have_lineage(
         for stimulus in stimuli
         if stimulus.suite == "counterfactual_editing_workbench"
     )
+
+
+def test_virtual_lesion_config_controls_types_and_low_contrast(
+    tmp_path: Path,
+) -> None:
+    stimuli = generate_stimuli(
+        suites=("virtual_lesion_lab",),
+        output_dir=tmp_path,
+        seed=123,
+        config={
+            "virtual_lesion_base_count": 1,
+            "virtual_lesion_types": ["low_contrast", "sham_reencode"],
+            "lesion_strengths": [1.0],
+        },
+    )
+
+    baseline = next(stimulus for stimulus in stimuli if stimulus.kind == "baseline")
+    low_contrast = next(
+        stimulus for stimulus in stimuli if stimulus.kind == "low_contrast"
+    )
+    sham = next(stimulus for stimulus in stimuli if stimulus.kind == "sham_reencode")
+    baseline_image = Image.open(baseline.metadata["source_image"]).convert("RGB")
+    low_contrast_image = Image.open(low_contrast.metadata["source_image"]).convert(
+        "RGB"
+    )
+
+    assert len(stimuli) == 3
+    assert low_contrast.metadata["lesion_base_type"] == "low_contrast"
+    assert low_contrast.metadata["mask_sha256"]
+    assert sham.metadata["strength"] == 0.0
+    assert np.asarray(low_contrast_image).std() < np.asarray(baseline_image).std()
+
+
+def test_optimizer_candidates_have_stable_param_hashes(tmp_path: Path) -> None:
+    first = generate_stimuli(
+        suites=("discrete_stimulus_optimizer",),
+        output_dir=tmp_path / "first",
+        seed=123,
+        config={"optimizer_candidate_count": 3},
+    )
+    second = generate_stimuli(
+        suites=("discrete_stimulus_optimizer",),
+        output_dir=tmp_path / "second",
+        seed=123,
+        config={"optimizer_candidate_count": 3},
+    )
+
+    assert [item.metadata["param_hash"] for item in first] == [
+        item.metadata["param_hash"] for item in second
+    ]
+    assert all(len(item.metadata["param_hash"]) == 64 for item in first)
+
+
+def test_counterfactual_config_records_edit_magnitude(tmp_path: Path) -> None:
+    stimuli = generate_stimuli(
+        suites=("counterfactual_editing_workbench",),
+        output_dir=tmp_path,
+        seed=123,
+        config={
+            "counterfactual_base_count": 1,
+            "counterfactual_edit_types": ["local_blur"],
+        },
+    )
+
+    edits = [stimulus for stimulus in stimuli if stimulus.metadata.get("parent_id")]
+
+    assert len(edits) == 1
+    assert edits[0].metadata["edit_type"] == "local_blur"
+    assert edits[0].metadata["changed_pixel_fraction"] > 0
+    assert edits[0].metadata["semantic_class"] == "low_level"
 
 
 def test_generate_stimuli_rejects_unknown_suite(tmp_path: Path) -> None:

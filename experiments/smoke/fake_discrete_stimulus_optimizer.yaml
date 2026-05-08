@@ -1,0 +1,13 @@
+id: smoke/fake-discrete-stimulus-optimizer
+title: Fake backend discrete stimulus optimizer
+backend: fake
+seed: 20260508
+suites:
+  - discrete_stimulus_optimizer
+stimuli:
+  optimizer_candidate_count: 16
+backend_config:
+  vertices: 64
+  timesteps: 5
+output:
+  report: true

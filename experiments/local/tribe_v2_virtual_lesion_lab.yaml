@@ -1,0 +1,27 @@
+id: local/tribe-v2-virtual-lesion-lab
+title: TRIBE v2 virtual lesion lab
+backend: tribe-v2
+seed: 20260508
+suites:
+  - virtual_lesion_lab
+stimuli:
+  virtual_lesion_base_count: 1
+  virtual_lesion_types:
+    - mask_left
+    - central_occlusion
+    - low_contrast
+    - sham_reencode
+  lesion_strengths: [1.0]
+backend_config:
+  checkpoint: facebook/tribev2
+  model_ref: facebook/tribev2
+  max_predictions: 4
+  max_predictions_by_suite:
+    virtual_lesion_lab: 4
+  event_duration_seconds: 50.0
+  config_update:
+    data.num_workers: 0
+    data.batch_size: 1
+    data.video_feature.image.batch_size: 1
+output:
+  report: true

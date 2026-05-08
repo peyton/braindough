@@ -18,21 +18,38 @@ Each run should write:
       outputs/
         responses.npz
         responses.index.jsonl
+        deltas.npz
+        deltas.index.jsonl
         tables/
           stimuli.csv
           response_metrics.csv
           perturbation_comparisons.csv
+          lesion_manifest.csv
+          lesion_comparisons.csv
+          lesion_roi_summary.csv
+          top_delta_vertices.csv
+          candidate_catalog.jsonl
           latent_components.csv
           latent_loadings.csv
           optimization_history.jsonl
           objectives.json
+          counterfactual_edits.jsonl
+          counterfactual_pairs.csv
       figures/
         response_similarity.png
         mean_abs_activation.png
         perturbation_deltas.png
         optimization_trace.png
+        virtual_lesion_contact_sheet.png
+        lesion_scoreboard.png
+        lesion_dose_response.png
+        optimizer_candidate_contact_sheet.png
+        optimization_score_components.png
+        counterfactual_delta_grid.png
+        counterfactual_tradeoff.png
       report.md
       report.html
+      executive_summary.pdf
 
 Completed runs must include response outputs. Skipped or failed runs omit
 response outputs, keep `outputs` empty, and record the reason in
@@ -91,10 +108,25 @@ enough for downstream agents:
 - `latent_components.csv` and `latent_loadings.csv`: PCA/SVD-style component
   summaries when enough responses exist; otherwise an explicit
   `insufficient_samples` row.
+- `lesion_manifest.csv`: one row per generated virtual lesion with mask,
+  strength, fill, and source-image provenance.
+- `lesion_comparisons.csv`: parent/lesion response deltas, completeness
+  status, descriptive sensitivity metrics, and lesion metadata.
+- `lesion_roi_summary.csv` and `top_delta_vertices.csv`: atlas-free
+  vertex-bin and top-delta summaries that are suitable for CI and later ROI
+  adapters.
+- `candidate_catalog.jsonl`: one row per generated optimizer candidate,
+  including candidates not evaluated because of a prediction budget.
 - `optimization_history.jsonl`: one row per candidate with score, diversity
-  penalty, best-so-far, and replayable parameters.
+  penalty, best-so-far, status, and replayable parameters.
 - `objectives.json`: compact optimizer summary with the objective name, best
-  candidate, and stopping reason.
+  candidate, objective version, score direction, and stopping reason.
+- `counterfactual_edits.jsonl`: replayable rule metadata and image-change
+  metrics for each generated edit.
+- `counterfactual_pairs.csv`: complete and incomplete counterfactual pair
+  accounting with image-change and response-delta metrics.
+- `outputs/deltas.npz`: parent-child response delta arrays for complete pairs,
+  indexed by `outputs/deltas.index.jsonl`.
 
 ## Provenance Notes
 

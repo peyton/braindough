@@ -95,6 +95,9 @@ class TribeV2Backend:
         max_predictions_per_suite = int(
             spec.backend_config.get("max_predictions_per_suite", 0)
         )
+        max_predictions_by_suite = _suite_prediction_budgets(
+            spec.backend_config.get("max_predictions_by_suite", {})
+        )
         attempted_predictions = 0
         attempted_by_suite: dict[str, int] = {}
         responses_by_suite: dict[str, int] = {}
@@ -113,10 +116,12 @@ class TribeV2Backend:
                     }
                 )
                 break
+            suite_limit = max_predictions_by_suite.get(
+                stimulus.suite, max_predictions_per_suite
+            )
             if (
-                max_predictions_per_suite > 0
-                and attempted_by_suite.get(stimulus.suite, 0)
-                >= max_predictions_per_suite
+                suite_limit > 0
+                and attempted_by_suite.get(stimulus.suite, 0) >= suite_limit
             ):
                 if stimulus.suite not in suite_budget_events:
                     events.append(
@@ -124,7 +129,7 @@ class TribeV2Backend:
                             "event": "suite_prediction_budget_reached",
                             "backend": self.name,
                             "suite": stimulus.suite,
-                            "max_predictions_per_suite": max_predictions_per_suite,
+                            "max_predictions_per_suite": suite_limit,
                         }
                     )
                     suite_budget_events.add(stimulus.suite)
@@ -165,6 +170,14 @@ class TribeV2Backend:
                 prediction_errors.append(
                     f"{stimulus.stimulus_id}: {exc}\n{traceback.format_exc(limit=2)}"
                 )
+                events.append(
+                    {
+                        "event": "prediction_error",
+                        "backend": self.name,
+                        "stimulus_id": stimulus.stimulus_id,
+                        "error": str(exc),
+                    }
+                )
 
         status = "completed" if responses else "skipped"
         blocker = (
@@ -180,6 +193,7 @@ class TribeV2Backend:
             "prediction_errors": prediction_errors[:10],
             "max_predictions": max_predictions or None,
             "max_predictions_per_suite": max_predictions_per_suite or None,
+            "max_predictions_by_suite": max_predictions_by_suite or None,
             "attempted_predictions": attempted_predictions,
             "attempted_predictions_by_suite": attempted_by_suite,
             "responses_by_suite": responses_by_suite,
@@ -216,6 +230,20 @@ def _device_order(torch_module: Any, configured: object) -> list[str]:
         devices.append("mps")
     devices.append("cpu")
     return devices
+
+
+def _suite_prediction_budgets(raw: object) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    budgets: dict[str, int] = {}
+    for key, value in raw.items():
+        try:
+            budget = int(value)
+        except (TypeError, ValueError):
+            continue
+        if budget > 0:
+            budgets[str(key)] = budget
+    return budgets
 
 
 def _skipped(blocker: str) -> BackendResult:

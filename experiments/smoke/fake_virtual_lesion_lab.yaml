@@ -1,0 +1,22 @@
+id: smoke/fake-virtual-lesion-lab
+title: Fake backend virtual lesion lab
+backend: fake
+seed: 20260508
+suites:
+  - virtual_lesion_lab
+stimuli:
+  virtual_lesion_base_count: 2
+  virtual_lesion_types:
+    - mask_left
+    - central_occlusion
+    - low_contrast
+    - blur_suppression
+    - blank_suppression
+    - sham_reencode
+    - random_patch_same_area
+  lesion_strengths: [0.5, 1.0]
+backend_config:
+  vertices: 64
+  timesteps: 5
+output:
+  report: true

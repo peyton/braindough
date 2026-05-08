@@ -31,7 +31,7 @@ test:
 
 check: fmt-check lint typecheck test artifact-validate research-validate
 
-ci: bootstrap check run-fake run-fake-optimization
+ci: bootstrap check run-fake run-fake-optimization run-fake-lesion run-fake-optimizer run-fake-counterfactual
 
 doctor:
     mise exec -- uv run --python 3.12.13 braindough doctor
@@ -48,11 +48,29 @@ run-fake:
 run-fake-optimization:
     mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_perturbation_optimization.yaml
 
+run-fake-lesion:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_virtual_lesion_lab.yaml
+
+run-fake-optimizer:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_discrete_stimulus_optimizer.yaml
+
+run-fake-counterfactual:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_counterfactual_editing_workbench.yaml
+
 run-tribe:
     mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_first_suite.yaml
 
 run-tribe-optimization:
     mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_perturbation_optimization.yaml
+
+run-tribe-lesion:
+    mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_virtual_lesion_lab.yaml
+
+run-tribe-optimizer:
+    mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_discrete_stimulus_optimizer.yaml
+
+run-tribe-counterfactual:
+    mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_counterfactual_editing_workbench.yaml
 
 artifact-validate RUN_DIR='':
     run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \
