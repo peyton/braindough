@@ -1,0 +1,15 @@
+id: smoke/fake-first-suite
+title: Fake backend first-suite smoke test
+backend: fake
+seed: 20260508
+suites:
+  - image_activation
+  - visual_controls
+  - visual_perturbations
+  - temporalization
+  - audio_controls
+backend_config:
+  vertices: 64
+  timesteps: 5
+output:
+  report: true

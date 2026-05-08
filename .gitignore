@@ -216,3 +216,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Braindough local state and external artifact mirrors.
+.DS_Store
+.build/
+.braindough/
+.mise.local.toml
+.uv-cache/
+.pyright/
+
+# Large or local-only experiment outputs must live under BRAINDOUGH_HOME.
+runs/
+scratch/
+tmp/
+models/
+blobs/
+hf-cache/
+torch-cache/

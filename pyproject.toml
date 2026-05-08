@@ -1,0 +1,37 @@
+[project]
+name = "braindough-workspace"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Workspace configuration for braindough."
+readme = "README.md"
+license = "Unlicense"
+
+[tool.uv.workspace]
+members = ["packages/braindough"]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.1",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["packages/braindough/src", "scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.pyright]
+include = ["packages/braindough/src", "scripts", "tests"]
+extraPaths = ["packages/braindough/src"]
+pythonVersion = "3.12"
+venv = ".venv"
+venvPath = "."
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

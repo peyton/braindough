@@ -1,0 +1,42 @@
+/// Braindough tooling hooks.
+amends "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Builtins.pkl"
+
+local toolSteps = new Mapping<String, Step> {
+  ["ruff"] = (Builtins.ruff) {
+    batch = true
+  }
+  ["ruff_format"] = (Builtins.ruff_format) {
+    depends = "ruff"
+  }
+  ["shellcheck"] = Builtins.shellcheck
+  ["shfmt"] = Builtins.shfmt
+  ["actionlint"] = Builtins.actionlint
+  ["zizmor"] = (Builtins.zizmor) {
+    check_diff =
+      "tool_path=\"$(mise which zizmor)\" && env -u GITHUB_TOKEN -u GH_TOKEN -u ZIZMOR_GITHUB_TOKEN \"$tool_path\" --no-progress {{ files }}"
+    fix =
+      "tool_path=\"$(mise which zizmor)\" && env -u GITHUB_TOKEN -u GH_TOKEN -u ZIZMOR_GITHUB_TOKEN \"$tool_path\" --no-progress --fix {{ files }}"
+  }
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps {
+      ...toolSteps
+    }
+  }
+  ["check"] {
+    steps {
+      ...toolSteps
+    }
+  }
+  ["fix"] {
+    fix = true
+    steps {
+      ...toolSteps
+    }
+  }
+}
