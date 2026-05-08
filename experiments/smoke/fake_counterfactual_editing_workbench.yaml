@@ -1,0 +1,19 @@
+id: smoke/fake-counterfactual-editing-workbench
+title: Fake backend counterfactual editing workbench
+backend: fake
+seed: 20260508
+suites:
+  - counterfactual_editing_workbench
+stimuli:
+  counterfactual_base_count: 2
+  counterfactual_edit_types:
+    - color_swap
+    - local_blur
+    - background_lighten
+    - object_mask
+    - tile_scramble
+backend_config:
+  vertices: 64
+  timesteps: 5
+output:
+  report: true

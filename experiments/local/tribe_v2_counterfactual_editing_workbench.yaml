@@ -1,0 +1,25 @@
+id: local/tribe-v2-counterfactual-editing-workbench
+title: TRIBE v2 counterfactual editing workbench
+backend: tribe-v2
+seed: 20260508
+suites:
+  - counterfactual_editing_workbench
+stimuli:
+  counterfactual_base_count: 1
+  counterfactual_edit_types:
+    - color_swap
+    - local_blur
+    - object_mask
+backend_config:
+  checkpoint: facebook/tribev2
+  model_ref: facebook/tribev2
+  max_predictions: 4
+  max_predictions_by_suite:
+    counterfactual_editing_workbench: 4
+  event_duration_seconds: 50.0
+  config_update:
+    data.num_workers: 0
+    data.batch_size: 1
+    data.video_feature.image.batch_size: 1
+output:
+  report: true

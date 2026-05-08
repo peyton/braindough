@@ -78,8 +78,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "validate":
         return _validate(args.run_dir, fixture=args.fixture)
     if args.command == "report":
-        md_path, html_path = write_report(args.run_dir)
-        print(json.dumps({"report": str(md_path), "html": str(html_path)}, indent=2))
+        paths = write_report(args.run_dir)
+        print(
+            json.dumps(
+                {
+                    "report": str(paths[0]),
+                    "html": str(paths[1]),
+                    "pdf": str(paths[2]),
+                },
+                indent=2,
+            )
+        )
         return 0
     if args.command == "executive-summary":
         paths = write_executive_summary(

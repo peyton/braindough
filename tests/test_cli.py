@@ -9,8 +9,14 @@ def test_cli_experiments_list(capsys) -> None:  # type: ignore[no-untyped-def]
     output = capsys.readouterr().out
     assert "smoke/fake-first-suite" in output
     assert "smoke/fake-perturbation-optimization" in output
+    assert "smoke/fake-virtual-lesion-lab" in output
+    assert "smoke/fake-discrete-stimulus-optimizer" in output
+    assert "smoke/fake-counterfactual-editing-workbench" in output
     assert "local/tribe-v2-first-suite" in output
     assert "local/tribe-v2-perturbation-optimization" in output
+    assert "local/tribe-v2-virtual-lesion-lab" in output
+    assert "local/tribe-v2-discrete-stimulus-optimizer" in output
+    assert "local/tribe-v2-counterfactual-editing-workbench" in output
 
 
 def test_cli_validate_fixture(capsys) -> None:  # type: ignore[no-untyped-def]

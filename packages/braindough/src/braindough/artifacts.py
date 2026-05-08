@@ -17,6 +17,7 @@ import numpy as np
 
 from braindough import __version__
 from braindough.analysis import (
+    build_delta_arrays,
     build_derived_tables,
     build_objectives_summary,
     derived_metrics,
@@ -101,9 +102,8 @@ class RunArtifact:
         responses_sha256 = sha256_file(self.outputs_dir / "responses.npz")
 
         outputs: list[dict[str, Any]] = []
-        with (self.outputs_dir / "responses.index.jsonl").open(
-            "w", encoding="utf-8"
-        ) as handle:
+        index_path = self.outputs_dir / "responses.index.jsonl"
+        with index_path.open("w", encoding="utf-8") as handle:
             for key, value in sorted(responses.items()):
                 item = {
                     "id": key,
@@ -124,6 +124,15 @@ class RunArtifact:
                         "dtype": str(value.dtype),
                     }
                 )
+        outputs.append(
+            {
+                "id": "responses:index",
+                "path": str(index_path.relative_to(self.run_dir)),
+                "sha256": sha256_file(index_path),
+                "media_type": "application/x-ndjson",
+                "rows": len(responses),
+            }
+        )
         return outputs
 
     def write_metrics(
@@ -131,13 +140,14 @@ class RunArtifact:
         backend_metrics: dict[str, Any],
         responses: dict[str, np.ndarray],
         stimuli: list[Stimulus],
+        missing_statuses: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         metrics = {
             "schema_version": SCHEMA_VERSION,
             "backend": self.spec.backend,
             **_sanitize_local_paths(backend_metrics),
             **response_metrics(responses),
-            **derived_metrics(stimuli, responses),
+            **derived_metrics(stimuli, responses, missing_statuses=missing_statuses),
         }
         _write_json(self.run_dir / "metrics.json", metrics)
         _write_json(
@@ -146,19 +156,29 @@ class RunArtifact:
         return metrics
 
     def write_tables(
-        self, stimuli: list[Stimulus], responses: dict[str, np.ndarray]
+        self,
+        stimuli: list[Stimulus],
+        responses: dict[str, np.ndarray],
+        missing_statuses: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         tables_dir = self.outputs_dir / "tables"
         tables_dir.mkdir(parents=True, exist_ok=True)
-        tables = build_derived_tables(stimuli, responses)
+        tables = build_derived_tables(
+            stimuli, responses, missing_statuses=missing_statuses
+        )
         outputs: list[dict[str, Any]] = []
 
         csv_table_names = [
             "stimuli",
             "response_metrics",
             "perturbation_comparisons",
+            "lesion_manifest",
+            "lesion_comparisons",
+            "lesion_roi_summary",
+            "top_delta_vertices",
             "latent_components",
             "latent_loadings",
+            "counterfactual_pairs",
         ]
         for table_name in csv_table_names:
             path = tables_dir / f"{table_name}.csv"
@@ -166,31 +186,64 @@ class RunArtifact:
             _write_csv(path, rows)
             outputs.append(_table_output(self.run_dir, path, table_name, len(rows)))
 
-        optimization_rows = tables.get("optimization_history", [])
-        history_path = tables_dir / "optimization_history.jsonl"
-        with history_path.open("w", encoding="utf-8") as handle:
-            for row in optimization_rows:
-                handle.write(json.dumps(row, sort_keys=True) + "\n")
-        outputs.append(
-            _table_output(
-                self.run_dir,
-                history_path,
-                "optimization_history",
-                len(optimization_rows),
-            )
-        )
+        jsonl_table_names = [
+            "candidate_catalog",
+            "optimization_history",
+            "counterfactual_edits",
+        ]
+        for table_name in jsonl_table_names:
+            rows = tables.get(table_name, [])
+            path = tables_dir / f"{table_name}.jsonl"
+            _write_jsonl(path, rows)
+            outputs.append(_table_output(self.run_dir, path, table_name, len(rows)))
 
         objectives_path = tables_dir / "objectives.json"
-        _write_json(objectives_path, build_objectives_summary(optimization_rows))
+        _write_json(
+            objectives_path,
+            build_objectives_summary(tables.get("optimization_history", [])),
+        )
         outputs.append(
             _table_output(
                 self.run_dir,
                 objectives_path,
                 "objectives",
-                1 if optimization_rows else 0,
+                1 if tables.get("optimization_history", []) else 0,
             )
         )
         return outputs
+
+    def write_delta_arrays(
+        self, stimuli: list[Stimulus], responses: dict[str, np.ndarray]
+    ) -> list[dict[str, Any]]:
+        arrays, index_rows = build_delta_arrays(stimuli, responses)
+        requires_delta_artifact = any(
+            stimulus.suite in {"virtual_lesion_lab", "counterfactual_editing_workbench"}
+            for stimulus in stimuli
+        )
+        if not arrays and not requires_delta_artifact:
+            return []
+        delta_path = self.outputs_dir / "deltas.npz"
+        payload: dict[str, Any] = dict(arrays)
+        np.savez_compressed(delta_path, **payload)
+        delta_sha = sha256_file(delta_path)
+        index_path = self.outputs_dir / "deltas.index.jsonl"
+        _write_jsonl(index_path, index_rows)
+        return [
+            {
+                "id": "deltas",
+                "path": str(delta_path.relative_to(self.run_dir)),
+                "sha256": delta_sha,
+                "media_type": "application/vnd.numpy.npz",
+                "arrays": len(arrays),
+            },
+            {
+                "id": "deltas:index",
+                "path": str(index_path.relative_to(self.run_dir)),
+                "sha256": sha256_file(index_path),
+                "media_type": "application/x-ndjson",
+                "rows": len(index_rows),
+            },
+        ]
 
     def write_manifest(
         self,
@@ -268,15 +321,20 @@ def validate_artifact(run_dir: str | Path) -> list[str]:
     if status in {"skipped", "failed"} and not manifest.get("blocker"):
         errors.append("skipped or failed artifacts must include blocker")
     if status == "completed":
+        required_outputs = _required_completed_outputs(manifest)
         errors.extend(
             [
                 f"missing {item}"
-                for item in ["outputs/responses.npz", "outputs/responses.index.jsonl"]
+                for item in sorted(required_outputs)
                 if not (root / item).is_file()
             ]
         )
         if not manifest.get("outputs"):
             errors.append("completed artifacts must include outputs")
+        output_paths = {item.get("path") for item in manifest.get("outputs", [])}
+        for path in sorted(required_outputs):
+            if path not in output_paths:
+                errors.append(f"completed artifacts must include {path} output")
     for output in manifest.get("outputs", []):
         path = output.get("path")
         if not isinstance(path, str) or Path(path).is_absolute():
@@ -332,9 +390,7 @@ def validate_artifact(run_dir: str | Path) -> list[str]:
             errors.append("config.lock experiment_config_sha256 mismatch")
         if manifest.get("config", {}).get("config_sha256") != config_sha:
             errors.append("manifest config_sha256 mismatch")
-    checksums = (root / "checksums.sha256").read_text(encoding="utf-8")
-    if "manifest.json" not in checksums:
-        errors.append("checksums.sha256 does not include manifest.json")
+    errors.extend(_validate_checksums(root))
     return errors
 
 
@@ -400,7 +456,14 @@ def create_fixture_artifact() -> Path:
                     "media_type": "application/vnd.numpy.npz",
                     "shape": [1, 4],
                     "dtype": "float32",
-                }
+                },
+                {
+                    "id": "responses:index",
+                    "path": "outputs/responses.index.jsonl",
+                    "sha256": sha256_file(outputs / "responses.index.jsonl"),
+                    "media_type": "application/x-ndjson",
+                    "rows": 1,
+                },
             ],
             "metrics": {"schema_version": SCHEMA_VERSION, "n_responses": 1},
         },
@@ -422,6 +485,48 @@ def create_fixture_artifact() -> Path:
     (tmp / "events.ndjson").write_text("", encoding="utf-8")
     (tmp / "report.md").write_text("# Fixture\n", encoding="utf-8")
     (tmp / "report.html").write_text("<h1>Fixture</h1>\n", encoding="utf-8")
+    (tmp / "executive_summary.pdf").write_bytes(
+        b"%PDF-1.4\n% Braindough fixture PDF\n%%EOF\n"
+    )
+    (tmp / "figures" / "response_similarity.png").write_bytes(b"fixture figure\n")
+    (tmp / "figures" / "mean_abs_activation.png").write_bytes(b"fixture figure\n")
+    pdf_sha = sha256_file(tmp / "executive_summary.pdf")
+    manifest = json.loads((tmp / "manifest.json").read_text(encoding="utf-8"))
+    manifest["outputs"].extend(
+        [
+            {
+                "id": "report:report.md",
+                "path": "report.md",
+                "sha256": sha256_file(tmp / "report.md"),
+                "media_type": "text/markdown",
+            },
+            {
+                "id": "report:report.html",
+                "path": "report.html",
+                "sha256": sha256_file(tmp / "report.html"),
+                "media_type": "text/html",
+            },
+            {
+                "id": "report:executive_summary",
+                "path": "executive_summary.pdf",
+                "sha256": pdf_sha,
+                "media_type": "application/pdf",
+            },
+            {
+                "id": "figure:response_similarity.png",
+                "path": "figures/response_similarity.png",
+                "sha256": sha256_file(tmp / "figures" / "response_similarity.png"),
+                "media_type": "image/png",
+            },
+            {
+                "id": "figure:mean_abs_activation.png",
+                "path": "figures/mean_abs_activation.png",
+                "sha256": sha256_file(tmp / "figures" / "mean_abs_activation.png"),
+                "media_type": "image/png",
+            },
+        ]
+    )
+    _write_json(tmp / "manifest.json", manifest)
     checksum_rows = []
     for path in sorted(tmp.rglob("*")):
         if path.is_file() and path.name != "checksums.sha256":
@@ -449,6 +554,12 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow({key: _csv_value(row.get(key, "")) for key in fieldnames})
+
+
+def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(_sanitize_local_paths(row), sort_keys=True) + "\n")
 
 
 def _csv_value(value: Any) -> str | int | float | bool:
@@ -504,6 +615,74 @@ def _validate_required_mapping(
     payload: dict[str, Any], label: str, fields: list[str]
 ) -> list[str]:
     return [f"{label} missing {field}" for field in fields if field not in payload]
+
+
+def _required_completed_outputs(manifest: dict[str, Any]) -> set[str]:
+    paths = {
+        "outputs/responses.npz",
+        "outputs/responses.index.jsonl",
+        "report.md",
+        "report.html",
+        "executive_summary.pdf",
+        "figures/response_similarity.png",
+        "figures/mean_abs_activation.png",
+    }
+    suites = _manifest_suites(manifest)
+    if "latent_network_ica_explorer" in suites:
+        paths.update(
+            {
+                "outputs/tables/latent_components.csv",
+                "outputs/tables/latent_loadings.csv",
+            }
+        )
+    if "virtual_lesion_lab" in suites:
+        paths.update(
+            {
+                "outputs/deltas.npz",
+                "outputs/deltas.index.jsonl",
+                "outputs/tables/lesion_manifest.csv",
+                "outputs/tables/lesion_comparisons.csv",
+                "outputs/tables/lesion_roi_summary.csv",
+                "outputs/tables/top_delta_vertices.csv",
+                "figures/virtual_lesion_contact_sheet.png",
+                "figures/lesion_scoreboard.png",
+                "figures/lesion_dose_response.png",
+            }
+        )
+    if "discrete_stimulus_optimizer" in suites:
+        paths.update(
+            {
+                "outputs/tables/candidate_catalog.jsonl",
+                "outputs/tables/optimization_history.jsonl",
+                "outputs/tables/objectives.json",
+                "figures/optimization_trace.png",
+                "figures/optimizer_candidate_contact_sheet.png",
+                "figures/optimization_score_components.png",
+            }
+        )
+    if "counterfactual_editing_workbench" in suites:
+        paths.update(
+            {
+                "outputs/deltas.npz",
+                "outputs/deltas.index.jsonl",
+                "outputs/tables/counterfactual_edits.jsonl",
+                "outputs/tables/counterfactual_pairs.csv",
+                "figures/counterfactual_delta_grid.png",
+                "figures/counterfactual_tradeoff.png",
+            }
+        )
+    return paths
+
+
+def _manifest_suites(manifest: dict[str, Any]) -> set[str]:
+    suites: set[str] = set()
+    for item in manifest.get("inputs", []):
+        if not isinstance(item, dict):
+            continue
+        metadata = item.get("metadata", {})
+        if isinstance(metadata, dict) and isinstance(metadata.get("suite"), str):
+            suites.add(metadata["suite"])
+    return suites
 
 
 def _contains_absolute_path(value: Any) -> bool:
@@ -578,6 +757,41 @@ def _output_contains_absolute_path(path: Path) -> bool:
                     return True
         return False
     return False
+
+
+def _validate_checksums(root: Path) -> list[str]:
+    checksum_path = root / "checksums.sha256"
+    errors: list[str] = []
+    entries: dict[str, str] = {}
+    for line_number, line in enumerate(
+        checksum_path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        if not line:
+            continue
+        match = re.match(r"^([0-9a-fA-F]{64})  (.+)$", line)
+        if not match:
+            errors.append(f"checksums.sha256 line {line_number} is malformed")
+            continue
+        digest, relative_path = match.groups()
+        if Path(relative_path).is_absolute():
+            errors.append(f"checksums.sha256 path is not relative: {relative_path}")
+            continue
+        entries[relative_path] = digest.lower()
+
+    expected: dict[str, str] = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_file() and path.name != checksum_path.name:
+            expected[str(path.relative_to(root))] = sha256_file(path)
+
+    for relative_path, expected_digest in expected.items():
+        digest = entries.get(relative_path)
+        if digest is None:
+            errors.append(f"checksums.sha256 missing {relative_path}")
+        elif digest != expected_digest:
+            errors.append(f"checksums.sha256 mismatch {relative_path}")
+    for relative_path in sorted(set(entries) - set(expected)):
+        errors.append(f"checksums.sha256 references missing {relative_path}")
+    return errors
 
 
 def _git_state() -> tuple[str | None, bool]:
