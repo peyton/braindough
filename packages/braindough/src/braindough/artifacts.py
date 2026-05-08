@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -14,12 +16,24 @@ from typing import Any
 import numpy as np
 
 from braindough import __version__
-from braindough.analysis import next_experiment_suggestions, response_metrics
+from braindough.analysis import (
+    build_derived_tables,
+    build_objectives_summary,
+    derived_metrics,
+    next_experiment_suggestions,
+    response_metrics,
+)
 from braindough.config import ExperimentSpec, is_absolute_local_path
 from braindough.stimuli import Stimulus
 from braindough.storage import BraindoughPaths, sha256_file, sha256_text
 
 SCHEMA_VERSION = "braindough.artifact.v1"
+_LOCAL_PATH_FRAGMENT_RE = re.compile(
+    r"(?:file://)?/(?:Users|Volumes|tmp|private/tmp|var/folders)[^\n\r\t\"'<>]*"
+)
+_WINDOWS_PATH_FRAGMENT_RE = re.compile(
+    r"(?:[a-zA-Z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+|\\[^\\/]+)[^\n\r\t\"'<>]*"
+)
 
 
 def _now() -> str:
@@ -74,7 +88,9 @@ class RunArtifact:
     def write_events(self, events: list[dict[str, Any]]) -> None:
         with (self.run_dir / "events.ndjson").open("w", encoding="utf-8") as handle:
             for event in events:
-                handle.write(json.dumps(event, sort_keys=True) + "\n")
+                handle.write(
+                    json.dumps(_sanitize_local_paths(event), sort_keys=True) + "\n"
+                )
 
     def write_responses(self, responses: dict[str, np.ndarray]) -> list[dict[str, Any]]:
         if responses:
@@ -111,19 +127,70 @@ class RunArtifact:
         return outputs
 
     def write_metrics(
-        self, backend_metrics: dict[str, Any], responses: dict[str, np.ndarray]
+        self,
+        backend_metrics: dict[str, Any],
+        responses: dict[str, np.ndarray],
+        stimuli: list[Stimulus],
     ) -> dict[str, Any]:
         metrics = {
             "schema_version": SCHEMA_VERSION,
             "backend": self.spec.backend,
-            **backend_metrics,
+            **_sanitize_local_paths(backend_metrics),
             **response_metrics(responses),
+            **derived_metrics(stimuli, responses),
         }
         _write_json(self.run_dir / "metrics.json", metrics)
         _write_json(
             self.run_dir / "next_experiments.json", next_experiment_suggestions(metrics)
         )
         return metrics
+
+    def write_tables(
+        self, stimuli: list[Stimulus], responses: dict[str, np.ndarray]
+    ) -> list[dict[str, Any]]:
+        tables_dir = self.outputs_dir / "tables"
+        tables_dir.mkdir(parents=True, exist_ok=True)
+        tables = build_derived_tables(stimuli, responses)
+        outputs: list[dict[str, Any]] = []
+
+        csv_table_names = [
+            "stimuli",
+            "response_metrics",
+            "perturbation_comparisons",
+            "latent_components",
+            "latent_loadings",
+        ]
+        for table_name in csv_table_names:
+            path = tables_dir / f"{table_name}.csv"
+            rows = tables.get(table_name, [])
+            _write_csv(path, rows)
+            outputs.append(_table_output(self.run_dir, path, table_name, len(rows)))
+
+        optimization_rows = tables.get("optimization_history", [])
+        history_path = tables_dir / "optimization_history.jsonl"
+        with history_path.open("w", encoding="utf-8") as handle:
+            for row in optimization_rows:
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+        outputs.append(
+            _table_output(
+                self.run_dir,
+                history_path,
+                "optimization_history",
+                len(optimization_rows),
+            )
+        )
+
+        objectives_path = tables_dir / "objectives.json"
+        _write_json(objectives_path, build_objectives_summary(optimization_rows))
+        outputs.append(
+            _table_output(
+                self.run_dir,
+                objectives_path,
+                "objectives",
+                1 if optimization_rows else 0,
+            )
+        )
+        return outputs
 
     def write_manifest(
         self,
@@ -137,7 +204,7 @@ class RunArtifact:
             "schema_version": SCHEMA_VERSION,
             "run_id": self.run_id,
             "status": self.status,
-            "blocker": self.blocker,
+            "blocker": _sanitize_local_paths(self.blocker),
             "created_at": self.started_at,
             "completed_at": _now(),
             "backend": {
@@ -225,6 +292,8 @@ def validate_artifact(run_dir: str | Path) -> list[str]:
             errors.append(f"output sha256 mismatch: {path}")
         if not output.get("media_type"):
             errors.append(f"output missing media_type: {output.get('id')}")
+        if output_path.is_file() and _output_contains_absolute_path(output_path):
+            errors.append(f"output contains absolute path metadata: {path}")
     for item in manifest.get("inputs", []):
         uri = item.get("uri")
         if not isinstance(uri, str) or Path(uri).is_absolute():
@@ -239,6 +308,16 @@ def validate_artifact(run_dir: str | Path) -> list[str]:
     metrics = json.loads((root / "metrics.json").read_text(encoding="utf-8"))
     if metrics.get("schema_version") != SCHEMA_VERSION:
         errors.append("metrics has wrong schema_version")
+    if _contains_absolute_path(metrics):
+        errors.append("metrics contains absolute path")
+    if _text_contains_absolute_path(
+        (root / "events.ndjson").read_text(encoding="utf-8")
+    ):
+        errors.append("events.ndjson contains absolute path")
+    if _text_contains_absolute_path((root / "report.md").read_text(encoding="utf-8")):
+        errors.append("report.md contains absolute path")
+    if _text_contains_absolute_path((root / "report.html").read_text(encoding="utf-8")):
+        errors.append("report.html contains absolute path")
     config_lock = json.loads((root / "config.lock.json").read_text(encoding="utf-8"))
     if config_lock.get("schema_version") != SCHEMA_VERSION:
         errors.append("config.lock has wrong schema_version")
@@ -363,6 +442,45 @@ def _write_json(path: Path, payload: Any) -> None:
     )
 
 
+def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fieldnames = sorted({field for row in rows for field in row})
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: _csv_value(row.get(key, "")) for key in fieldnames})
+
+
+def _csv_value(value: Any) -> str | int | float | bool:
+    if isinstance(value, str | int | float | bool):
+        return value
+    if value is None:
+        return ""
+    return json.dumps(value, sort_keys=True)
+
+
+def _table_output(
+    run_dir: Path, path: Path, table_name: str, row_count: int
+) -> dict[str, Any]:
+    return {
+        "id": f"table:{table_name}",
+        "path": str(path.relative_to(run_dir)),
+        "sha256": sha256_file(path),
+        "media_type": _table_media_type(path),
+        "rows": row_count,
+    }
+
+
+def _table_media_type(path: Path) -> str:
+    if path.suffix == ".csv":
+        return "text/csv"
+    if path.suffix == ".jsonl":
+        return "application/x-ndjson"
+    if path.suffix == ".json":
+        return "application/json"
+    return "application/octet-stream"
+
+
 def _json_sha256(payload: Any) -> str:
     return sha256_text(json.dumps(payload, sort_keys=True))
 
@@ -394,7 +512,71 @@ def _contains_absolute_path(value: Any) -> bool:
     if isinstance(value, list):
         return any(_contains_absolute_path(child) for child in value)
     if isinstance(value, str):
-        return is_absolute_local_path(value)
+        return is_absolute_local_path(value) or _text_contains_absolute_path(value)
+    return False
+
+
+def _sanitize_local_paths(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _sanitize_local_paths(child) for key, child in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_local_paths(child) for child in value]
+    if isinstance(value, tuple):
+        return [_sanitize_local_paths(child) for child in value]
+    if isinstance(value, Path):
+        return _path_token(str(value))
+    if isinstance(value, str):
+        return _sanitize_local_path_string(value)
+    return value
+
+
+def _sanitize_local_path_string(value: str) -> str | dict[str, str]:
+    if is_absolute_local_path(value):
+        return _path_token(value)
+
+    sanitized = _LOCAL_PATH_FRAGMENT_RE.sub(
+        lambda match: _path_token_text(match.group(0)), value
+    )
+    return _WINDOWS_PATH_FRAGMENT_RE.sub(
+        lambda match: _path_token_text(match.group(0)), sanitized
+    )
+
+
+def _path_token(path: str) -> dict[str, str]:
+    stripped = path.removeprefix("file://").rstrip("/\\")
+    normalized = stripped.replace("\\", "/")
+    name = normalized.rsplit("/", 1)[-1] if normalized else "path"
+    return {
+        "local_path_name": name or "path",
+        "local_path_sha256": sha256_text(normalized),
+    }
+
+
+def _path_token_text(path: str) -> str:
+    token = _path_token(path)
+    return f"[local-path:{token['local_path_name']}:{token['local_path_sha256'][:12]}]"
+
+
+def _text_contains_absolute_path(value: str) -> bool:
+    return bool(
+        _LOCAL_PATH_FRAGMENT_RE.search(value) or _WINDOWS_PATH_FRAGMENT_RE.search(value)
+    )
+
+
+def _output_contains_absolute_path(path: Path) -> bool:
+    if path.suffix == ".json":
+        return _contains_absolute_path(json.loads(path.read_text(encoding="utf-8")))
+    if path.suffix == ".jsonl":
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line and _contains_absolute_path(json.loads(line)):
+                return True
+        return False
+    if path.suffix == ".csv":
+        with path.open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                if _contains_absolute_path(row):
+                    return True
+        return False
     return False
 
 

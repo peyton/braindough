@@ -1,0 +1,13 @@
+{
+  "created_at": "2026-05-08T18:01:28Z",
+  "id": "latent_network_ica_explorer",
+  "prompt": "Use ChatGPT Deep Research. Please start the detailed report immediately and do not ask clarifying questions. Research latent_network_ica_explorer for Braindough, a public Python uv/mise/hk/just monorepo for local in-silico neuroscience experiments using Meta/Facebook TRIBE v2. Heavy models/cache/scratch live under /Volumes/Virtual Machine HD/Projects/braindough; CI must use a deterministic fake backend; local TRIBE runs must be bounded. Find state-of-the-art literature on ICA, PCA, sparse coding, latent factorization, neural response decomposition, and interpretability in computational neuroscience and multimodal models. Separate established claims from speculative ones. Propose an end-to-end locally tractable experiment with implementation details, artifacts, metrics, failure modes, and citations.",
+  "source": {
+    "capture_method": "Browser launched ChatGPT Deep Research; report iframe still in progress/not extractable",
+    "model_selector": "Pro with Deep research enabled",
+    "tool": "Browser",
+    "url": "https://chatgpt.com/c/69fe21d3-9fbc-83e8-ba25-4bef3a80e101"
+  },
+  "status": "in_progress",
+  "title": "Deep Research: latent_network_ica_explorer"
+}

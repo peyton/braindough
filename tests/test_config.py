@@ -31,6 +31,41 @@ def test_discover_experiment_specs() -> None:
 
     assert Path("experiments/smoke/fake_first_suite.yaml") in specs
     assert Path("experiments/local/tribe_v2_first_suite.yaml") in specs
+    assert Path("experiments/smoke/fake_perturbation_optimization.yaml") in specs
+    assert Path("experiments/local/tribe_v2_perturbation_optimization.yaml") in specs
+
+
+def test_load_perturbation_optimization_spec() -> None:
+    spec = load_experiment_spec("experiments/smoke/fake_perturbation_optimization.yaml")
+
+    assert spec.experiment_id == "smoke/fake-perturbation-optimization"
+    assert spec.backend == "fake"
+    assert spec.suites == (
+        "latent_network_ica_explorer",
+        "virtual_lesion_lab",
+        "discrete_stimulus_optimizer",
+        "counterfactual_editing_workbench",
+    )
+
+
+def test_unknown_suite_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "bad-suite.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "id: bad/suite",
+                "title: Bad suite",
+                "backend: fake",
+                "suites:",
+                "  - not_a_real_suite",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Unknown experiment suite"):
+        load_experiment_spec(path)
 
 
 def test_experiment_identity_redacts_absolute_paths(tmp_path: Path) -> None:

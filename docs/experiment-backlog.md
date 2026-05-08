@@ -74,6 +74,48 @@ Command:
 Acceptance: outputs label every audio condition and record whether the visual
 track was present, muted, or replaced.
 
+## Perturbation And Optimization PR
+
+These suites are now in scope for the perturbation/optimization implementation:
+
+### `latent_network_ica_explorer`
+
+Purpose: discover response components across controlled visual factors and make
+the sample-count limit explicit.
+
+Command:
+
+    just run-fake-optimization
+    just run-tribe-optimization
+
+Acceptance: outputs include `latent_components.csv`, `latent_loadings.csv`, and
+an `insufficient_samples` component row when fewer than two predictions are
+available.
+
+### `virtual_lesion_lab`
+
+Purpose: compare baseline stimuli with v1 stimulus-factor lesions without
+claiming internal model ablation.
+
+Acceptance: outputs include parent/lesion response deltas and correlations in
+`perturbation_comparisons.csv`; model-internal layer ablation remains deferred.
+
+### `discrete_stimulus_optimizer`
+
+Purpose: run a deterministic finite search over generated candidates and rank
+them by a response objective with a diversity penalty.
+
+Acceptance: outputs include `optimization_history.jsonl`, `objectives.json`,
+and a report summary naming the best candidates and stopping reason.
+
+### `counterfactual_editing_workbench`
+
+Purpose: create replayable paired minimal edits and quantify predicted-response
+deltas between each base stimulus and edit.
+
+Acceptance: every edit has parent/pair metadata, and pair deltas appear in the
+common perturbation comparison table.
+
 ## Deferred Ideas
 
 ### Image-caption Alignment

@@ -74,6 +74,10 @@ class FakeBackend:
             "visual_perturbations": 0.55,
             "temporalization": 0.65,
             "audio_controls": 0.45,
+            "latent_network_ica_explorer": 0.58,
+            "virtual_lesion_lab": 0.52,
+            "discrete_stimulus_optimizer": 0.62,
+            "counterfactual_editing_workbench": 0.56,
         }.get(stimulus.suite, 0.35)
         modality_offset = 0.2 if stimulus.modality == "audio" else 0.0
         temporal = np.linspace(0.2, 1.0, timesteps, dtype=np.float32)[:, None]

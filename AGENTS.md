@@ -8,6 +8,8 @@
 - Use `uv` for all Python dependency and command execution.
 - Keep CI fake-backend only unless a future workflow has explicit credentials,
   storage, and hardware assumptions.
+- Use `just research-validate` after adding or changing files in
+  `docs/research/`.
 - Heavy models, downloaded code, caches, scratch, and run outputs belong under
   `BRAINDOUGH_HOME`, defaulting to `/Volumes/Virtual Machine HD/Projects/braindough`.
 
@@ -25,5 +27,6 @@
 ## Verification
 
 - Before handing off code changes, run `just ci`.
-- For TRIBE v2 work, run `just run-tribe` when the local machine has time and
-  storage; otherwise make sure the skipped report explains the blocker.
+- For TRIBE v2 work, run `just run-tribe` or `just run-tribe-optimization` when
+  the local machine has time and storage; otherwise make sure the skipped report
+  explains the blocker.

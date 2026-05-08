@@ -1,0 +1,13 @@
+{
+  "created_at": "2026-05-08T18:01:28Z",
+  "id": "virtual_lesion_lab",
+  "prompt": "Use ChatGPT Deep Research. Please start the detailed report immediately and do not ask clarifying questions. Research virtual_lesion_lab for Braindough, a public Python uv/mise/hk/just monorepo for local in-silico neuroscience experiments using Meta/Facebook TRIBE v2. Heavy models/cache/scratch live under /Volumes/Virtual Machine HD/Projects/braindough; CI must use a deterministic fake backend; local TRIBE runs must be bounded. Find state-of-the-art literature on virtual lesions, ablations, causal perturbation, in-silico lesioning, representational knockout, and descriptive sensitivity analysis. Distinguish causal inference from sensitivity analysis. Propose local implementation paths including feature/channel ablation, subspace lesion, stimulus-factor lesions, artifacts, metrics, risks, and citations.",
+  "source": {
+    "capture_method": "Browser launched ChatGPT Deep Research; report iframe still in progress/not extractable",
+    "model_selector": "Pro with Deep research enabled",
+    "tool": "Browser",
+    "url": "https://chatgpt.com/c/69fe21da-4604-83e8-aff7-17bc4f2d0a40"
+  },
+  "status": "in_progress",
+  "title": "Deep Research: virtual_lesion_lab"
+}

@@ -1,0 +1,13 @@
+{
+  "created_at": "2026-05-08T18:01:28Z",
+  "id": "discrete_stimulus_optimizer",
+  "prompt": "Use ChatGPT Deep Research. Please start the detailed report immediately and do not ask clarifying questions. Research discrete_stimulus_optimizer for Braindough, a public Python uv/mise/hk/just monorepo for local in-silico neuroscience experiments using Meta/Facebook TRIBE v2. Heavy models/cache/scratch live under /Volumes/Virtual Machine HD/Projects/braindough; CI must use a deterministic fake backend; local TRIBE runs must be bounded. Find state-of-the-art literature on discrete optimization, combinatorial search, neuroevolution, Bayesian optimization over discrete spaces, active learning, adversarial stimulus search, and model-based stimulus design. Compare greedy/beam search, evolutionary search, and surrogate-guided search. Propose a locally tractable experiment with exact artifacts, metrics/acceptance criteria, risks/license/data constraints, now-vs-deferred scope, and citations.",
+  "source": {
+    "capture_method": "Browser launched ChatGPT Deep Research; report iframe still in progress/not extractable",
+    "model_selector": "Pro with Deep research enabled",
+    "tool": "Browser",
+    "url": "https://chatgpt.com/c/69fe21e2-2fd0-83e8-90b5-3742d50ec004"
+  },
+  "status": "in_progress",
+  "title": "Deep Research: discrete_stimulus_optimizer"
+}

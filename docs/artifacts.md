@@ -18,9 +18,19 @@ Each run should write:
       outputs/
         responses.npz
         responses.index.jsonl
+        tables/
+          stimuli.csv
+          response_metrics.csv
+          perturbation_comparisons.csv
+          latent_components.csv
+          latent_loadings.csv
+          optimization_history.jsonl
+          objectives.json
       figures/
         response_similarity.png
         mean_abs_activation.png
+        perturbation_deltas.png
+        optimization_trace.png
       report.md
       report.html
 
@@ -64,7 +74,26 @@ The implementation should expose:
 
 `just artifact-validate` fails when required files are missing, schema versions
 are wrong, output paths are not relative, hashes do not match, a completed run
-has no outputs, or the manifest status is invalid.
+has no outputs, output table sidecars contain machine-local absolute paths, or
+the manifest status is invalid.
+
+## Derived Tables
+
+Perturbation and optimization suites add small sidecar tables that are stable
+enough for downstream agents:
+
+- `stimuli.csv`: one row per generated stimulus, including suite, role, parent,
+  pair, and response-present flags.
+- `response_metrics.csv`: scalar response summaries by stimulus.
+- `perturbation_comparisons.csv`: parent/child response deltas and
+  correlations for perturbations, lesions, and counterfactual edits.
+- `latent_components.csv` and `latent_loadings.csv`: PCA/SVD-style component
+  summaries when enough responses exist; otherwise an explicit
+  `insufficient_samples` row.
+- `optimization_history.jsonl`: one row per candidate with score, diversity
+  penalty, best-so-far, and replayable parameters.
+- `objectives.json`: compact optimizer summary with the objective name, best
+  candidate, and stopping reason.
 
 ## Provenance Notes
 

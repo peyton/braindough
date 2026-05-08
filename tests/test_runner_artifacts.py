@@ -33,6 +33,8 @@ def test_fake_run_writes_valid_artifact(tmp_path: Path) -> None:
     assert (run_dir / "figures" / "response_similarity.png").is_file()
     assert (run_dir / "report.md").is_file()
     assert (run_dir / "next_experiments.json").is_file()
+    assert (run_dir / "outputs" / "tables" / "stimuli.csv").is_file()
+    assert (run_dir / "outputs" / "tables" / "response_metrics.csv").is_file()
 
 
 def test_user_image_specs_write_path_neutral_config(tmp_path: Path) -> None:
@@ -89,6 +91,75 @@ def test_fake_backend_is_deterministic(tmp_path: Path) -> None:
     key = sorted(first_npz.files)[0]
 
     assert np.array_equal(first_npz[key], second_npz[key])
+
+
+def test_fake_perturbation_optimization_run_writes_tables(tmp_path: Path) -> None:
+    run_dir = run_experiment(
+        "experiments/smoke/fake_perturbation_optimization.yaml",
+        home=tmp_path / "braindough-home",
+    )
+
+    assert not validate_artifact(run_dir)
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    table_dir = run_dir / "outputs" / "tables"
+    history = (table_dir / "optimization_history.jsonl").read_text(encoding="utf-8")
+    objectives = json.loads((table_dir / "objectives.json").read_text("utf-8"))
+
+    assert manifest["status"] == "completed"
+    assert any(output["id"] == "table:objectives" for output in manifest["outputs"])
+    assert metrics["n_optimizer_candidates"] == 12
+    assert metrics["n_perturbation_comparisons"] > 0
+    assert metrics["latent_components"]["status"] == "computed"
+    assert len(history.splitlines()) == 12
+    assert objectives["stopping_reason"] == "candidate_budget_exhausted"
+    assert (run_dir / "figures" / "perturbation_deltas.png").is_file()
+    assert (run_dir / "figures" / "optimization_trace.png").is_file()
+    assert "## Latent Components" in (run_dir / "report.md").read_text(encoding="utf-8")
+
+
+def test_validate_rejects_absolute_paths_in_table_outputs(tmp_path: Path) -> None:
+    path = create_fixture_artifact()
+    table_dir = path / "outputs" / "tables"
+    table_dir.mkdir(parents=True)
+    table_path = table_dir / "bad.csv"
+    table_path.write_text("path\n/tmp/secret.png\n", encoding="utf-8")
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["outputs"].append(
+        {
+            "id": "table:bad",
+            "path": "outputs/tables/bad.csv",
+            "sha256": "0" * 64,
+            "media_type": "text/csv",
+        }
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    errors = validate_artifact(path)
+    assert "output contains absolute path metadata: outputs/tables/bad.csv" in errors
+
+
+def test_validate_rejects_absolute_paths_in_metrics_events_and_reports() -> None:
+    path = create_fixture_artifact()
+    (path / "metrics.json").write_text(
+        json.dumps({"schema_version": "braindough.artifact.v1", "note": "/tmp/secret"}),
+        encoding="utf-8",
+    )
+    (path / "events.ndjson").write_text(
+        json.dumps({"event": "bad", "path": "/Users/peyton/secret"}) + "\n",
+        encoding="utf-8",
+    )
+    (path / "report.md").write_text("bad /Volumes/secret\n", encoding="utf-8")
+    (path / "report.html").write_text(
+        "bad C:\\Users\\peyton\\secret\n", encoding="utf-8"
+    )
+
+    errors = validate_artifact(path)
+    assert "metrics contains absolute path" in errors
+    assert "events.ndjson contains absolute path" in errors
+    assert "report.md contains absolute path" in errors
+    assert "report.html contains absolute path" in errors
 
 
 def test_validate_rejects_incomplete_completed_artifact() -> None:
