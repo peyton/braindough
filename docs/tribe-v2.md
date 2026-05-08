@@ -55,16 +55,22 @@ The first suite uses TRIBE v2 conservatively:
 Run surface:
 
     just run-tribe
+    just run-tribe-optimization
 
-The checked-in local spec sets `max_predictions: 1` so the default laptop run
-can produce at least one TRIBE-backed response without spending hours on the
-full generated suite. Remove or raise that cap for longer local studies after
-the first artifact is validated.
+The checked-in first-suite local spec sets `max_predictions: 1` so the default
+laptop run can produce at least one TRIBE-backed response without spending hours
+on the full generated suite. Remove or raise that cap for longer local studies
+after the first artifact is validated.
 
 TRIBE v2's public checkpoint emits 100 prediction steps, so the checked-in
 local spec also uses a 50-second event duration for short generated clips. The
 visual content is still a short generated MP4; the longer event window keeps the
 wrapper's segment mask aligned with the checkpoint output.
+
+The perturbation/optimization local spec uses `max_predictions: 4` and
+`max_predictions_per_suite: 1`, so the default local run attempts one prediction
+from each of the four new suites. Tables can still be partial if a prediction
+fails or a backend budget is reached. CI coverage remains fake-backend-only.
 
 ## Interpretation Rules
 

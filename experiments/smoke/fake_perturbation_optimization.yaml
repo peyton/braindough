@@ -1,0 +1,16 @@
+id: smoke/fake-perturbation-optimization
+title: Fake backend perturbation and optimization suite
+backend: fake
+seed: 20260508
+suites:
+  - latent_network_ica_explorer
+  - virtual_lesion_lab
+  - discrete_stimulus_optimizer
+  - counterfactual_editing_workbench
+stimuli:
+  optimizer_candidate_count: 12
+backend_config:
+  vertices: 64
+  timesteps: 5
+output:
+  report: true

@@ -92,7 +92,13 @@ class TribeV2Backend:
         events: list[dict[str, object]] = []
         prediction_errors: list[str] = []
         max_predictions = int(spec.backend_config.get("max_predictions", 0))
+        max_predictions_per_suite = int(
+            spec.backend_config.get("max_predictions_per_suite", 0)
+        )
         attempted_predictions = 0
+        attempted_by_suite: dict[str, int] = {}
+        responses_by_suite: dict[str, int] = {}
+        suite_budget_events: set[str] = set()
         for stimulus in stimuli:
             if max_predictions > 0 and (
                 len(responses) >= max_predictions
@@ -107,6 +113,22 @@ class TribeV2Backend:
                     }
                 )
                 break
+            if (
+                max_predictions_per_suite > 0
+                and attempted_by_suite.get(stimulus.suite, 0)
+                >= max_predictions_per_suite
+            ):
+                if stimulus.suite not in suite_budget_events:
+                    events.append(
+                        {
+                            "event": "suite_prediction_budget_reached",
+                            "backend": self.name,
+                            "suite": stimulus.suite,
+                            "max_predictions_per_suite": max_predictions_per_suite,
+                        }
+                    )
+                    suite_budget_events.add(stimulus.suite)
+                continue
             if stimulus.modality not in {"video", "audio"}:
                 continue
             event_type = "Video" if stimulus.modality == "video" else "Audio"
@@ -120,10 +142,16 @@ class TribeV2Backend:
             }
             try:
                 attempted_predictions += 1
+                attempted_by_suite[stimulus.suite] = (
+                    attempted_by_suite.get(stimulus.suite, 0) + 1
+                )
                 dataframe = pd.DataFrame([event])
                 prediction, _segments = model.predict(dataframe, verbose=False)
                 responses[stimulus.stimulus_id] = np.asarray(
                     prediction, dtype=np.float32
+                )
+                responses_by_suite[stimulus.suite] = (
+                    responses_by_suite.get(stimulus.suite, 0) + 1
                 )
                 events.append(
                     {
@@ -151,7 +179,10 @@ class TribeV2Backend:
             "n_responses": len(responses),
             "prediction_errors": prediction_errors[:10],
             "max_predictions": max_predictions or None,
+            "max_predictions_per_suite": max_predictions_per_suite or None,
             "attempted_predictions": attempted_predictions,
+            "attempted_predictions_by_suite": attempted_by_suite,
+            "responses_by_suite": responses_by_suite,
             "device_attempts": device_order,
             "checkpoint": str(checkpoint_ref),
         }

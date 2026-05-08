@@ -22,6 +22,10 @@ Expected paths:
   backend.
 - `packages/braindough/src/braindough/stimuli.py`: image, video, and audio
   generation helpers.
+- `packages/braindough/src/braindough/suites.py`: known experiment suite
+  registry and unknown-suite validation.
+- `packages/braindough/src/braindough/analysis.py`: response summaries,
+  perturbation deltas, optimizer traces, and PCA/SVD-style component tables.
 - `packages/braindough/src/braindough/storage.py`: external path and
   content-hash helpers.
 - `packages/braindough/src/braindough/artifacts.py`: artifact writer and schema
@@ -67,6 +71,30 @@ Each suite should be callable through the same command surface:
     just run-fake
     just run-tribe
 
+## Perturbation And Optimization Suites
+
+The second suite group is CI-safe through the fake backend and opt-in locally
+through TRIBE v2:
+
+- `latent_network_ica_explorer`: build a response matrix over controlled visual
+  factors and decompose it with PCA/SVD-style components when enough responses
+  exist.
+- `virtual_lesion_lab`: compare baseline stimuli with stimulus-factor lesions
+  such as masks, low contrast, blur suppression, and blank suppression.
+- `discrete_stimulus_optimizer`: evaluate a seeded finite stimulus library with
+  a mean-absolute-response objective plus a diversity penalty.
+- `counterfactual_editing_workbench`: compare paired base/edit stimuli with
+  stable parent and pair metadata.
+
+Command surface:
+
+    just run-fake-optimization
+    just run-tribe-optimization
+
+All four suites use the same artifact contract. New sidecar tables live under
+`outputs/tables/` and remain small enough to commit only as generated run
+artifacts outside the repository.
+
 ## Repo Commands
 
 The implementation should expose these repo-local commands:
@@ -80,7 +108,10 @@ The implementation should expose these repo-local commands:
     just check
     just ci
     just run-fake
+    just run-fake-optimization
     just run-tribe
+    just run-tribe-optimization
+    just research-validate
     just artifact-validate RUN_DIR=<run-dir>
     just report RUN_DIR=<run-dir>
 

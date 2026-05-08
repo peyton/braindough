@@ -41,7 +41,9 @@ def run_experiment(spec_path: str | Path, home: str | Path | None = None) -> Pat
         if result.status != "skipped" or result.responses
         else []
     )
-    metrics = artifact.write_metrics(result.metrics, result.responses)
+    if result.status != "skipped" or result.responses:
+        outputs.extend(artifact.write_tables(stimuli, result.responses))
+    metrics = artifact.write_metrics(result.metrics, result.responses, stimuli)
     artifact.write_manifest(stimuli=stimuli, outputs=outputs, metrics=metrics)
     write_report(run_dir)
     artifact.write_checksums()

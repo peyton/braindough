@@ -1,0 +1,23 @@
+id: local/tribe-v2-perturbation-optimization
+title: TRIBE v2 perturbation and optimization suite
+backend: tribe-v2
+seed: 20260508
+suites:
+  - latent_network_ica_explorer
+  - virtual_lesion_lab
+  - discrete_stimulus_optimizer
+  - counterfactual_editing_workbench
+stimuli:
+  optimizer_candidate_count: 4
+backend_config:
+  checkpoint: facebook/tribev2
+  model_ref: facebook/tribev2
+  max_predictions: 4
+  max_predictions_per_suite: 1
+  event_duration_seconds: 50.0
+  config_update:
+    data.num_workers: 0
+    data.batch_size: 1
+    data.video_feature.image.batch_size: 1
+output:
+  report: true

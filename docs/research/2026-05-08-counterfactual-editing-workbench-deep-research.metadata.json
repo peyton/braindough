@@ -1,0 +1,13 @@
+{
+  "created_at": "2026-05-08T18:01:28Z",
+  "id": "counterfactual_editing_workbench",
+  "prompt": "Use ChatGPT Deep Research. Please start the detailed report immediately and do not ask clarifying questions. Research counterfactual_editing_workbench for Braindough, a public Python uv/mise/hk/just monorepo for local in-silico neuroscience experiments using Meta/Facebook TRIBE v2. Heavy models/cache/scratch live under /Volumes/Virtual Machine HD/Projects/braindough; CI must use a deterministic fake backend; local TRIBE runs must be bounded. Find state-of-the-art literature on counterfactual explanations, minimal edits, image/stimulus editing, causal counterfactuals, and edited-neighbor comparisons in neuroscience and ML. Distinguish semantic-preserving edits from meaning-changing edits. Compare rule-based edits, masked/local inpainting-style edits, and constrained paired stimulus generation. Propose local implementation, artifacts, metrics/thresholds, risks/license/data constraints, now-vs-deferred scope, and citations.",
+  "source": {
+    "capture_method": "Browser launched ChatGPT Deep Research; report iframe still in progress/not extractable",
+    "model_selector": "Pro with Deep research enabled",
+    "tool": "Browser",
+    "url": "https://chatgpt.com/c/69fe21ea-4804-83e8-a487-72a70b148928"
+  },
+  "status": "in_progress",
+  "title": "Deep Research: counterfactual_editing_workbench"
+}

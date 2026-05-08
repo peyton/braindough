@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml
 
+from braindough.suites import validate_suite_names
+
 _WINDOWS_ABSOLUTE_PATH_RE = re.compile(
     r"^(?:[a-zA-Z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+|\\[^\\/]+)"
 )
@@ -68,6 +70,7 @@ def load_experiment_spec(path: str | Path) -> ExperimentSpec:
         or not all(isinstance(item, str) for item in suites)
     ):
         raise ValueError("'suites' must be a non-empty list of strings")
+    validate_suite_names(suites)
 
     seed = raw.get("seed", 0)
     if not isinstance(seed, int):

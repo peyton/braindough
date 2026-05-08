@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-05-08T18:01:28Z",
+  "id": "project_deep_research_report",
+  "prompt": "Original project-level ChatGPT Deep Research request for Braindough experiment planning, including TRIBE v2, image-to-brain activation, adjacent perturbation and optimization experiments, and artifact requirements.",
+  "source": {
+    "capture_method": "Browser visible report capture; full report body was not extractable from the accessible DOM",
+    "tool": "Browser",
+    "url": "https://chatgpt.com/c/69fd9a0f-5a78-83e8-92a3-8b0d3581258b"
+  },
+  "status": "captured_partial",
+  "title": "Project Deep Research Report"
+}

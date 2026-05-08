@@ -24,8 +24,11 @@ def test_justfile_exposes_required_targets() -> None:
         "storage-init:",
         "storage-doctor:",
         "run-fake:",
+        "run-fake-optimization:",
         "run-tribe:",
+        "run-tribe-optimization:",
         "artifact-validate",
+        "research-validate:",
         "report RUN_DIR:",
     ]
 

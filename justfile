@@ -29,9 +29,9 @@ typecheck:
 test:
     mise exec -- uv run --python 3.12.13 pytest
 
-check: fmt-check lint typecheck test artifact-validate
+check: fmt-check lint typecheck test artifact-validate research-validate
 
-ci: bootstrap check run-fake
+ci: bootstrap check run-fake run-fake-optimization
 
 doctor:
     mise exec -- uv run --python 3.12.13 braindough doctor
@@ -45,8 +45,14 @@ storage-doctor:
 run-fake:
     mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_first_suite.yaml
 
+run-fake-optimization:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_perturbation_optimization.yaml
+
 run-tribe:
     mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_first_suite.yaml
+
+run-tribe-optimization:
+    mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_perturbation_optimization.yaml
 
 artifact-validate RUN_DIR='':
     run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \
@@ -55,6 +61,9 @@ artifact-validate RUN_DIR='':
         else \
             mise exec -- uv run --python 3.12.13 braindough validate --fixture; \
         fi
+
+research-validate:
+    mise exec -- uv run --python 3.12.13 python -m scripts.research_validator
 
 report RUN_DIR:
     run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \
