@@ -24,6 +24,7 @@ SUMMARY_SCHEMA_VERSION = "braindough.executive_summary.v1"
 TARGET_RUNS = {
     ("fake", "smoke/fake-perturbation-optimization"),
     ("tribe-v2", "local/tribe-v2-perturbation-optimization"),
+    ("bold5000-ridge", "local/bold5000-roi-encoding"),
 }
 
 
@@ -49,6 +50,8 @@ class RunBundle:
             return "software-validation"
         if self.backend == "tribe-v2":
             return "bounded-model-prediction"
+        if self.backend == "bold5000-ridge":
+            return "measured-public-data"
         return "artifact-supported"
 
     def to_payload(self) -> dict[str, Any]:
@@ -69,6 +72,22 @@ class RunBundle:
             "mean_abs_activation": self.metrics.get("mean_abs_activation"),
             "top_activation_stimuli": self.metrics.get("top_activation_stimuli", []),
             "optimization": self.metrics.get("optimization", {}),
+            "bold5000_benchmark": self.metrics.get("bold5000_benchmark", {}),
+            "bold5000_context": {
+                "dataset_release": self.metrics.get("dataset_release"),
+                "dataset_release_label": self.metrics.get("dataset_release_label"),
+                "subjects": self.metrics.get("subjects", []),
+                "rois": self.metrics.get("rois", []),
+                "tr": self.metrics.get("tr"),
+                "trial_limit": self.metrics.get("trial_limit"),
+                "trial_offset": self.metrics.get("trial_offset"),
+                "validation_fraction": self.metrics.get("validation_fraction"),
+                "seed": self.metrics.get("seed"),
+                "permutations": self.metrics.get("permutations"),
+                "bootstraps": self.metrics.get("bootstraps"),
+                "p_value_note": self.metrics.get("p_value_note"),
+                "source_caveat": self.metrics.get("source_caveat"),
+            },
             "latent_components": self.metrics.get("latent_components", {}),
             "n_optimizer_candidates": self.metrics.get("n_optimizer_candidates", 0),
             "n_perturbation_comparisons": self.metrics.get(
@@ -89,7 +108,7 @@ class RunBundle:
 
 
 def discover_latest_run_dirs(home: str | Path | None = None) -> list[Path]:
-    """Discover latest perturbation/optimization fake and TRIBE runs."""
+    """Discover latest fake, TRIBE, and BOLD5000 summary target runs."""
 
     paths = BraindoughPaths.discover(home=home)
     if not paths.runs_root.is_dir():
@@ -119,6 +138,7 @@ def discover_latest_run_dirs(home: str | Path | None = None) -> list[Path]:
     ordered_keys = [
         ("fake", "smoke/fake-perturbation-optimization"),
         ("tribe-v2", "local/tribe-v2-perturbation-optimization"),
+        ("bold5000-ridge", "local/bold5000-roi-encoding"),
     ]
     return [latest[key][1] for key in ordered_keys if key in latest]
 
@@ -136,8 +156,8 @@ def write_executive_summary(
         selected_run_dirs = discover_latest_run_dirs(home=home)
     if not selected_run_dirs:
         raise ValueError(
-            "no perturbation/optimization runs found; run just run-fake-optimization "
-            "or pass --run-dir"
+            "no executive-summary target runs found; run just run-fake-optimization, "
+            "just run-bold5000-real, or pass --run-dir"
         )
 
     paths = BraindoughPaths.discover(home=home)
@@ -217,10 +237,13 @@ def _build_payload(
         "schema_version": SUMMARY_SCHEMA_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "audience": "research_leads",
-        "scope": "Braindough program plus latest perturbation/optimization runs",
+        "scope": _summary_scope(bundles),
         "disclaimer": (
-            "All TRIBE values in this report are model-predicted responses. "
-            "They are not measured human neural data."
+            "TRIBE values in this report are model-predicted responses. "
+            "BOLD5000 values, when present, are Release 1.0 measured public "
+            "ROI responses evaluated through bounded local benchmark code. "
+            "BOLD5000 Release 2.0 is recommended by the dataset authors for "
+            "new functional analyses and is not evaluated here."
         ),
         "runs": runs,
         "key_findings": _key_findings(bundles),
@@ -231,10 +254,21 @@ def _build_payload(
     }
 
 
+def _summary_scope(bundles: Sequence[RunBundle]) -> str:
+    if bundles and all(bundle.backend == "bold5000-ridge" for bundle in bundles):
+        return (
+            "BOLD5000 Release 1.0 real-data ROI encoding benchmark using public "
+            "measured fMRI responses, stimulus-name metadata, and local "
+            "Braindough artifact machinery"
+        )
+    return "Braindough program plus latest perturbation/optimization runs"
+
+
 def _key_findings(bundles: Sequence[RunBundle]) -> list[dict[str, str]]:
     by_backend = {bundle.backend: bundle for bundle in bundles}
     fake = by_backend.get("fake")
     tribe = by_backend.get("tribe-v2")
+    bold_runs = [bundle for bundle in bundles if bundle.backend == "bold5000-ridge"]
     findings: list[dict[str, str]] = []
     if fake is not None:
         findings.append(
@@ -250,7 +284,7 @@ def _key_findings(bundles: Sequence[RunBundle]) -> list[dict[str, str]]:
                 ),
             }
         )
-    else:
+    elif not bold_runs:
         findings.append(
             {
                 "title": "Fake backend run is not present in this summary",
@@ -275,7 +309,43 @@ def _key_findings(bundles: Sequence[RunBundle]) -> list[dict[str, str]]:
                 ),
             }
         )
-    else:
+    for bold in bold_runs:
+        benchmark = bold.metrics.get("bold5000_benchmark", {})
+        best_roi = benchmark.get("best_roi", "unknown")
+        best_model = benchmark.get("best_model", "unknown")
+        best_r = benchmark.get("best_pearson_mean")
+        significant = benchmark.get("n_nominally_significant", 0)
+        context = _bold5000_run_context(bold)
+        findings.append(
+            {
+                "title": "BOLD5000 Release 1.0 adds measured ROI response evidence",
+                "evidence_strength": "measured-public-data",
+                "claim": (
+                    "The BOLD5000 ridge benchmark evaluates Release 1.0 processed "
+                    "ROI matrices, not fake responses or TRIBE predictions. In "
+                    f"the selected run, the best metadata model was {best_model} "
+                    f"for {best_roi} with mean voxel Pearson r {best_r}; "
+                    f"nominal exploratory uncorrected ROI results: {significant}. "
+                    f"{context}"
+                ),
+            }
+        )
+        findings.append(
+            {
+                "title": "Metadata-only features set a real-data lower bound",
+                "evidence_strength": "measured-public-data",
+                "claim": (
+                    "The bounded BOLD5000 run is intentionally modest: it uses "
+                    "presentation metadata and labels because the direct stimuli "
+                    "archive does not include raw image pixels. The small "
+                    "non-significant effect is useful as a reproducible negative "
+                    "control before adding COCO/ImageNet/SUN pixel features. "
+                    "BOLD5000 Release 2.0 is the author-recommended source for "
+                    "future functional analyses and is not evaluated here."
+                ),
+            }
+        )
+    if tribe is None and not bold_runs:
         findings.append(
             {
                 "title": "TRIBE execution is not represented in selected runs",
@@ -349,8 +419,27 @@ def _key_findings(bundles: Sequence[RunBundle]) -> list[dict[str, str]]:
     return findings
 
 
+def _bold5000_run_context(bundle: RunBundle) -> str:
+    subjects = ", ".join(str(item) for item in bundle.metrics.get("subjects", []))
+    rois = ", ".join(str(item) for item in bundle.metrics.get("rois", []))
+    release = bundle.metrics.get("dataset_release_label", "BOLD5000 Release 1.0")
+    return (
+        f"Run context: {release}; subjects {subjects or 'unknown'}; "
+        f"ROIs {rois or 'unknown'}; trial limit {bundle.metrics.get('trial_limit')}; "
+        f"trial offset {bundle.metrics.get('trial_offset', 0)}; validation fraction "
+        f"{bundle.metrics.get('validation_fraction')}; seed {bundle.metrics.get('seed')}; "
+        f"{bundle.metrics.get('permutations')} permutations; "
+        f"{bundle.metrics.get('bootstraps')} bootstraps; p-values are exploratory "
+        "and uncorrected for multiple ROI/model comparisons."
+    )
+
+
 def _limitations() -> list[str]:
     return [
+        "The BOLD5000 v1 benchmark uses Release 1.0 processed ROI matrices plus metadata/labels, not Release 2.0 GLM outputs or raw image pixels.",
+        "BOLD5000 Release 2.0 is recommended by the dataset authors for new functional analyses and remains future adapter scope.",
+        "BOLD5000 permutation p-values are exploratory and uncorrected for multiple ROI/model comparisons.",
+        "BOLD5000 source labels are coarse and should be treated as lower-bound features, not state-of-the-art encoders.",
         "TRIBE outputs here are model-predicted responses, not measured human data.",
         "Fake-backend results validate schemas, reports, and deterministic control flow only.",
         "Bounded local TRIBE runs are too small for stable effect-size or optimization claims.",
@@ -384,8 +473,8 @@ def _future_directions() -> list[dict[str, str]]:
             "phase": "Phase 2",
             "title": "Natural-scene benchmark adapter",
             "next_step": (
-                "Add NSD/Algonauts-style loaders for licensed local subsets and "
-                "separate measured-data evaluation from synthetic optimization."
+                "Add COCO/ImageNet/SUN pixel retrieval for BOLD5000 and then "
+                "NSD/Algonauts-style loaders for licensed local subsets."
             ),
         },
         {
@@ -411,6 +500,7 @@ def _write_figures(
     figures_dir: Path, bundles: Sequence[RunBundle]
 ) -> list[dict[str, Any]]:
     charts: list[dict[str, Any]] = []
+    charts.extend(_bold5000_charts(figures_dir, bundles))
     charts.append(_suite_coverage_chart(figures_dir, bundles))
     charts.append(_mean_abs_by_suite_chart(figures_dir, bundles))
     charts.append(_optimizer_trace_chart(figures_dir, bundles))
@@ -418,11 +508,127 @@ def _write_figures(
     return charts
 
 
+def _bold5000_charts(
+    figures_dir: Path, bundles: Sequence[RunBundle]
+) -> list[dict[str, Any]]:
+    comparison_rows: list[dict[str, Any]] = []
+    score_rows: list[dict[str, Any]] = []
+    for bundle in bundles:
+        if bundle.backend != "bold5000-ridge":
+            continue
+        for row in bundle.tables.get("bold5000_model_comparison", []):
+            comparison_rows.append({**row, "run_id": bundle.run_id})
+        for row in bundle.tables.get("bold5000_roi_scores", []):
+            score_rows.append({**row, "run_id": bundle.run_id})
+    if not comparison_rows:
+        return []
+    return [
+        _bold5000_roi_score_chart(figures_dir, comparison_rows),
+        _bold5000_model_comparison_chart(figures_dir, score_rows),
+    ]
+
+
+def _bold5000_roi_score_chart(
+    figures_dir: Path, rows: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    labels = [f"{row.get('subject')} {row.get('roi')}" for row in rows]
+    values = [_float_value(row.get("best_pearson_mean"), 0.0) for row in rows]
+    lows = [
+        _float_value(row.get("bootstrap_low"), value)
+        for row, value in zip(rows, values, strict=False)
+    ]
+    highs = [
+        _float_value(row.get("bootstrap_high"), value)
+        for row, value in zip(rows, values, strict=False)
+    ]
+    fig, ax = plt.subplots(figsize=(8.5, 4.8))
+    ax.bar(range(len(values)), values, color="#3867d6")
+    ax.errorbar(
+        range(len(values)),
+        values,
+        yerr=[
+            [max(0.0, value - low) for value, low in zip(values, lows, strict=False)],
+            [
+                max(0.0, high - value)
+                for value, high in zip(values, highs, strict=False)
+            ],
+        ],
+        fmt="none",
+        ecolor="#2f3640",
+        linewidth=0.8,
+    )
+    ax.axhline(0.0, color="#2f3640", linewidth=0.8)
+    ax.set_title("BOLD5000 validation correlation by ROI")
+    ax.set_ylabel("mean voxel Pearson r")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8)
+    fig.tight_layout()
+    path = figures_dir / "bold5000_roi_scores.png"
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+    return {
+        "title": "BOLD5000 validation correlation by ROI",
+        "path": f"figures/{path.name}",
+        "purpose": "Shows held-out metadata-to-ROI prediction scores for measured BOLD5000 Release 1.0 ROI responses.",
+        "data_source": "outputs/tables/bold5000_model_comparison.csv",
+        "interpretation": "Values near zero indicate that coarse metadata has little predictive power on the bounded split.",
+        "caveat": "This is not a Release 2.0, pixel-feature, CLIP, DINO, TRIBE, NSD, or hidden-leaderboard benchmark.",
+    }
+
+
+def _bold5000_model_comparison_chart(
+    figures_dir: Path, rows: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    model_names = sorted(
+        {
+            str(row.get("model"))
+            for row in rows
+            if row.get("model") and row.get("model") != "mean_baseline"
+        }
+    )
+    means = []
+    for model in model_names:
+        model_values = [
+            _float_value(row.get("pearson_mean"), 0.0)
+            for row in rows
+            if row.get("model") == model
+        ]
+        means.append(sum(model_values) / len(model_values) if model_values else 0.0)
+    fig, ax = plt.subplots(figsize=(8.5, 4.8))
+    if model_names:
+        ax.bar(range(len(model_names)), means, color="#20bf6b")
+        ax.axhline(0.0, color="#2f3640", linewidth=0.8)
+        ax.set_xticks(range(len(model_names)))
+        ax.set_xticklabels(
+            [_labelize(model) for model in model_names], rotation=25, ha="right"
+        )
+    else:
+        ax.text(0.5, 0.5, "No metadata model scores available", ha="center")
+        ax.set_axis_off()
+    ax.set_title("BOLD5000 metadata model comparison")
+    ax.set_ylabel("mean ROI Pearson r")
+    fig.tight_layout()
+    path = figures_dir / "bold5000_model_comparison.png"
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+    return {
+        "title": "BOLD5000 metadata model comparison",
+        "path": f"figures/{path.name}",
+        "purpose": "Compares source-family, token-hash, and combined metadata baselines across ROIs.",
+        "data_source": "outputs/tables/bold5000_roi_scores.csv",
+        "interpretation": "The best simple model becomes the reproducible lower bound for later pixel encoders.",
+        "caveat": "Coarse labels are not expected to match modern visual encoding literature.",
+    }
+
+
 def _suite_coverage_chart(
     figures_dir: Path, bundles: Sequence[RunBundle]
 ) -> dict[str, Any]:
     suites = _suite_names(bundles)
     backends = [bundle.backend for bundle in bundles]
+    bold_only = bool(bundles) and all(
+        bundle.backend == "bold5000-ridge" for bundle in bundles
+    )
     fig, ax = plt.subplots(figsize=(8.5, 4.8))
     width = 0.8 / max(1, len(bundles))
     offsets = [(-0.4 + width / 2) + idx * width for idx in range(len(bundles))]
@@ -454,7 +660,11 @@ def _suite_coverage_chart(
         "path": f"figures/{path.name}",
         "purpose": "Shows which suites produced predictions under each backend.",
         "data_source": "metrics.json suite_summary",
-        "interpretation": "Fake should be complete; bounded TRIBE should show capped coverage.",
+        "interpretation": (
+            "BOLD5000 response counts are ROI/model prediction arrays, not one array per trial."
+            if bold_only
+            else "Fake should be complete; bounded TRIBE should show capped coverage."
+        ),
         "caveat": "Coverage is a runtime budget signal, not a biological effect.",
         "backends": backends,
     }
@@ -563,6 +773,9 @@ def _float_value(value: Any, default: float) -> float:
 def _capability_chart(
     figures_dir: Path, bundles: Sequence[RunBundle]
 ) -> dict[str, Any]:
+    bold_only = bool(bundles) and all(
+        bundle.backend == "bold5000-ridge" for bundle in bundles
+    )
     metrics = [
         ("Stimuli", "n_stimuli"),
         ("Responses", "n_responses"),
@@ -595,10 +808,22 @@ def _capability_chart(
     return {
         "title": "Artifact capability comparison",
         "path": f"figures/{path.name}",
-        "purpose": "Contrasts fake CI coverage with bounded local TRIBE coverage.",
+        "purpose": (
+            "Shows BOLD5000 run size, ROI response arrays, and absence of optimizer-only outputs."
+            if bold_only
+            else "Contrasts fake CI coverage with bounded local TRIBE coverage."
+        ),
         "data_source": "manifest.json and metrics.json",
-        "interpretation": "Large fake counts validate software paths; TRIBE counts reflect local budget.",
-        "caveat": "Count parity is not expected until TRIBE budgets are expanded.",
+        "interpretation": (
+            "The benchmark is an encoding evaluation, so optimizer and perturbation counts should be zero."
+            if bold_only
+            else "Large fake counts validate software paths; TRIBE counts reflect local budget."
+        ),
+        "caveat": (
+            "Counts summarize artifact shape, not scientific effect size."
+            if bold_only
+            else "Count parity is not expected until TRIBE budgets are expanded."
+        ),
     }
 
 
@@ -697,8 +922,14 @@ def _write_runs_page(pdf: PdfPages, runs: Sequence[dict[str, Any]]) -> None:
     fig.text(
         0.08,
         0.25,
-        "Interpretation: complete fake coverage validates software contracts; "
-        "bounded TRIBE coverage demonstrates local model execution under caps.",
+        (
+            "Interpretation: BOLD5000 response counts are compact ROI/model "
+            "prediction arrays used for artifact compatibility; scientific "
+            "interpretation comes from the ROI benchmark tables."
+            if runs and all(run.get("backend") == "bold5000-ridge" for run in runs)
+            else "Interpretation: complete fake coverage validates software contracts; "
+            "bounded TRIBE coverage demonstrates local model execution under caps."
+        ),
         fontsize=10.5,
         va="top",
         wrap=True,
@@ -775,6 +1006,27 @@ def _markdown_summary(payload: dict[str, Any]) -> str:
 
 def _literature_sources() -> list[dict[str, str]]:
     return [
+        {
+            "id": "bold5000_download",
+            "title": "BOLD5000 Dataset Download",
+            "url": "https://bold5000-dataset.github.io/website/download.html",
+            "kind": "dataset",
+            "relevance": "Primary source for Release 1.0 and Release 2.0 data availability.",
+        },
+        {
+            "id": "bold5000_terms",
+            "title": "BOLD5000 Terms of Use",
+            "url": "https://bold5000-dataset.github.io/website/terms.html",
+            "kind": "dataset_terms",
+            "relevance": "Primary source for fMRI data licensing and stimulus-image exclusions.",
+        },
+        {
+            "id": "bold5000_release_2_code",
+            "title": "BOLD5000 Release 2.0 code",
+            "url": "https://github.com/BOLD5000-dataset/BOLD5000",
+            "kind": "dataset_code",
+            "relevance": "Primary source noting Release 2.0 is recommended for functional analyses.",
+        },
         {
             "id": "tribe_v2_model_card",
             "title": "facebook/tribev2 model card",

@@ -20,6 +20,10 @@ Expected paths:
   backend.
 - `packages/braindough/src/braindough/backends/fake.py`: deterministic CI
   backend.
+- `packages/braindough/src/braindough/backends/bold5000_ridge.py`: real
+  BOLD5000 metadata-to-ROI ridge benchmark backend.
+- `packages/braindough/src/braindough/datasets/bold5000.py`: BOLD5000 download,
+  extraction, fixture, and lightweight metadata loader.
 - `packages/braindough/src/braindough/stimuli.py`: image, video, and audio
   generation helpers.
 - `packages/braindough/src/braindough/suites.py`: known experiment suite
@@ -106,6 +110,26 @@ contract is checked on every pull request. The focused TRIBE targets remain
 opt-in because they may download large model assets and can take minutes per
 prediction.
 
+## Real-Data Benchmark Suite
+
+`bold5000_roi_encoding` is the first measured-data suite. It stages BOLD5000
+Release 1.0 Figshare archives under `BRAINDOUGH_HOME`, reads subject stimulus
+lists and processed ROI HDF5 matrices, and evaluates simple ridge baselines that
+predict held-out ROI response vectors from source-family and filename/label
+token features. This is intentionally narrower than an image-feature benchmark
+because the small BOLD5000 stimuli archive contains presentation lists and
+labels, not the raw pixel images. BOLD5000 Release 2.0 is recommended by the
+dataset authors for new functional analyses and is future adapter scope.
+
+Command surface:
+
+    just dataset-bold5000-download
+    just dataset-bold5000-doctor
+    just run-bold5000-real
+
+The real-data target is opt-in and local-only. CI uses a tiny generated fixture
+instead of downloading or storing BOLD5000 participant response matrices.
+
 ## Repo Commands
 
 The implementation should expose these repo-local commands:
@@ -128,6 +152,9 @@ The implementation should expose these repo-local commands:
     just run-tribe-lesion
     just run-tribe-optimizer
     just run-tribe-counterfactual
+    just dataset-bold5000-download
+    just dataset-bold5000-doctor
+    just run-bold5000-real
     just research-validate
     just artifact-validate RUN_DIR=<run-dir>
     just report RUN_DIR=<run-dir>
@@ -152,3 +179,7 @@ rules before it is used by experiments.
 - TRIBE v2 source repository: https://github.com/facebookresearch/tribev2
 - NSD: https://naturalscenesdataset.org/
 - Algonauts 2023: https://algonautsproject.com/2023/index.html
+- BOLD5000: https://bold5000-dataset.github.io/website/
+- BOLD5000 terms: https://bold5000-dataset.github.io/website/terms.html
+- BOLD5000 Figshare: https://figshare.com/articles/dataset/BOLD5000/6459449
+- BOLD5000 Release 2.0 code: https://github.com/BOLD5000-dataset/BOLD5000

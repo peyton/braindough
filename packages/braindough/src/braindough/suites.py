@@ -51,6 +51,11 @@ SUITE_DEFINITIONS: dict[str, SuiteDefinition] = {
         name="counterfactual_editing_workbench",
         description="Paired minimal-edit stimuli for counterfactual response deltas.",
     ),
+    "bold5000_roi_encoding": SuiteDefinition(
+        name="bold5000_roi_encoding",
+        description="Real BOLD5000 ROI response benchmark over stimulus metadata.",
+        ci_safe=False,
+    ),
 }
 
 

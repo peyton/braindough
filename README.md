@@ -37,6 +37,12 @@ skipped artifact with the blocker instead of failing silently.
   validation.
 - `just run-fake` runs the CI-safe deterministic smoke experiment.
 - `just run-tribe` attempts the first local TRIBE v2 suite.
+- `just dataset-bold5000-download` stages BOLD5000 Release 1.0 stimulus-name
+  metadata and processed ROI response archives under external storage.
+- `just run-bold5000-real` runs a bounded real-data BOLD5000 ROI encoding
+  benchmark using Release 1.0 ROI matrices and stimulus metadata. BOLD5000
+  Release 2.0 is author-recommended for new functional analyses and remains
+  future adapter scope.
 - `just report RUN_DIR=...` rebuilds human-readable reports for an existing run.
 
 See `docs/` for architecture, storage layout, artifact schema, TRIBE v2 notes,

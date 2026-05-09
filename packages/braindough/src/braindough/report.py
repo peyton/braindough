@@ -81,6 +81,7 @@ def _write_figures(
     fig.savefig(path, dpi=150)
     plt.close(fig)
     figures.append(path)
+    figures.extend(_write_bold5000_figures(root, manifest, tables))
     perturbation_rows = tables.get("perturbation_comparisons", [])
     completed_perturbation_rows = [
         row
@@ -156,6 +157,112 @@ def _write_figures(
         figures.extend(_write_optimizer_figures(root, manifest, optimization_rows))
     figures.extend(_write_lesion_figures(root, manifest, tables))
     figures.extend(_write_counterfactual_figures(root, manifest, tables))
+    return figures
+
+
+def _write_bold5000_figures(
+    root: Path, manifest: dict[str, Any], tables: dict[str, Any]
+) -> list[Path]:
+    figures: list[Path] = []
+    if not _manifest_has_suite(manifest, "bold5000_roi_encoding"):
+        return figures
+    figures_dir = root / "figures"
+    rows = tables.get("bold5000_model_comparison", [])
+    if not rows:
+        figures.append(
+            _write_no_data_figure(
+                figures_dir / "bold5000_roi_scores.png",
+                "BOLD5000 ROI scores",
+                "No BOLD5000 ROI scores were available.",
+            )
+        )
+        figures.append(
+            _write_no_data_figure(
+                figures_dir / "bold5000_model_comparison.png",
+                "BOLD5000 model comparison",
+                "No BOLD5000 model comparison rows were available.",
+            )
+        )
+        return figures
+
+    labels = [f"{row.get('subject')} {row.get('roi')}" for row in rows]
+    values = [_float_value(row.get("best_pearson_mean"), 0.0) for row in rows]
+    lows = [
+        _float_value(row.get("bootstrap_low"), value)
+        for row, value in zip(rows, values, strict=False)
+    ]
+    highs = [
+        _float_value(row.get("bootstrap_high"), value)
+        for row, value in zip(rows, values, strict=False)
+    ]
+    fig, ax = plt.subplots(figsize=(max(6, len(labels) * 0.55), 4))
+    ax.bar(range(len(values)), values, color="#3867d6")
+    ax.errorbar(
+        range(len(values)),
+        values,
+        yerr=[
+            [max(0.0, value - low) for value, low in zip(values, lows, strict=False)],
+            [
+                max(0.0, high - value)
+                for value, high in zip(values, highs, strict=False)
+            ],
+        ],
+        fmt="none",
+        ecolor="#2f3640",
+        linewidth=0.8,
+    )
+    ax.axhline(0.0, color="#2f3640", linewidth=0.8)
+    ax.set_title("BOLD5000 validation correlation by ROI")
+    ax.set_ylabel("mean voxel Pearson r")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8)
+    fig.tight_layout()
+    path = figures_dir / "bold5000_roi_scores.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    figures.append(path)
+
+    score_rows = tables.get("bold5000_roi_scores", [])
+    model_names = sorted(
+        {
+            str(row.get("model"))
+            for row in score_rows
+            if row.get("model") and row.get("model") != "mean_baseline"
+        }
+    )
+    if model_names:
+        means = [
+            np.mean(
+                [
+                    _float_value(row.get("pearson_mean"), 0.0)
+                    for row in score_rows
+                    if row.get("model") == model
+                ]
+            )
+            for model in model_names
+        ]
+        fig, ax = plt.subplots(figsize=(max(5, len(model_names) * 1.2), 4))
+        ax.bar(range(len(model_names)), means, color="#20bf6b")
+        ax.axhline(0.0, color="#2f3640", linewidth=0.8)
+        ax.set_title("BOLD5000 metadata model comparison")
+        ax.set_ylabel("mean ROI Pearson r")
+        ax.set_xticks(range(len(model_names)))
+        ax.set_xticklabels(
+            [_labelize(model) for model in model_names], rotation=25, ha="right"
+        )
+        fig.tight_layout()
+        path = figures_dir / "bold5000_model_comparison.png"
+        fig.savefig(path, dpi=150)
+        plt.close(fig)
+        figures.append(path)
+    else:
+        figures.append(
+            _write_no_data_figure(
+                figures_dir / "bold5000_model_comparison.png",
+                "BOLD5000 model comparison",
+                "No non-baseline BOLD5000 model rows were available.",
+            )
+        )
     return figures
 
 
@@ -556,6 +663,45 @@ def _markdown_report(
     else:
         lines.append("- No latent component table was generated.")
 
+    lines.extend(["", "## BOLD5000 Real-Data Benchmark", ""])
+    bold_rows = tables.get("bold5000_model_comparison", [])
+    if bold_rows:
+        best_bold = max(
+            bold_rows,
+            key=lambda row: _float_value(row.get("best_pearson_mean"), 0.0),
+        )
+        subjects = ", ".join(str(item) for item in metrics.get("subjects", []))
+        rois = ", ".join(str(item) for item in metrics.get("rois", []))
+        release = metrics.get("dataset_release_label", "BOLD5000 Release 1.0")
+        lines.append(
+            "- Best ROI/model: "
+            f"`{best_bold.get('subject')} {best_bold.get('roi')}` with "
+            f"`{best_bold.get('best_model')}` "
+            f"(mean voxel Pearson r `{_float_value(best_bold.get('best_pearson_mean'), 0.0):.6f}`, "
+            f"exploratory uncorrected permutation p `{best_bold.get('permutation_p')}`)."
+        )
+        lines.append(
+            f"- ROI rows: `{len(bold_rows)}`; trial rows: "
+            f"`{len(tables.get('bold5000_trials', []))}`."
+        )
+        lines.append(
+            "- Run context: "
+            f"`{release}` processed ROI vectors; subjects `{subjects}`; ROIs `{rois}`; "
+            f"trial limit `{metrics.get('trial_limit')}`; trial offset "
+            f"`{metrics.get('trial_offset', 0)}`; validation fraction "
+            f"`{metrics.get('validation_fraction')}`; seed `{metrics.get('seed')}`; "
+            f"permutations `{metrics.get('permutations')}`; bootstraps "
+            f"`{metrics.get('bootstraps')}`."
+        )
+        lines.append(
+            "- Scope: BOLD5000 Release 1.0 ROI responses plus stimulus filenames, "
+            "source families, and labels. Release 2.0 is recommended by the dataset "
+            "authors for new functional analyses and is not evaluated by this adapter. "
+            "Raw pixel-image models are not part of this v1 run."
+        )
+    else:
+        lines.append("- No BOLD5000 benchmark table was generated.")
+
     lines.extend(["", "## Next Experiments", ""])
     for item in next_experiments:
         lines.append(f"- **{item['title']}** (`{item['id']}`): {item['rationale']}")
@@ -600,9 +746,13 @@ def _write_pdf(
             f"- Lesion comparisons: {len(tables.get('lesion_comparisons', []))}",
             f"- Optimizer candidates: {len(tables.get('candidate_catalog', []))}",
             f"- Counterfactual pairs: {len(tables.get('counterfactual_pairs', []))}",
+            f"- BOLD5000 ROI rows: {len(tables.get('bold5000_model_comparison', []))}",
             "",
-            "These are model-predicted response summaries for descriptive",
-            "sensitivity analysis. They are not human measurements or causal claims.",
+            "TRIBE/fake suites are model-predicted response summaries.",
+            "BOLD5000 suites use Release 1.0 measured public ROI response matrices.",
+            "Release 2.0 is recommended by BOLD5000 authors for new functional analyses.",
+            "The BOLD5000 v1 benchmark uses metadata/labels, not raw pixels.",
+            "Permutation p-values are exploratory and uncorrected.",
         ]
         ax.text(
             0.05,
@@ -653,15 +803,18 @@ def _read_tables(root: Path) -> dict[str, Any]:
             for line in path.read_text(encoding="utf-8").splitlines()
             if line
         ]
-    objectives_path = tables_dir / "objectives.json"
-    if objectives_path.is_file():
-        tables["objectives"] = _read_json(objectives_path)
+    for path in sorted(tables_dir.glob("*.json")):
+        tables[path.stem] = _read_json(path)
     return tables
 
 
 def _short_id(value: str) -> str:
     parts = value.split(":")
     return ":".join(parts[-2:]) if len(parts) > 2 else value
+
+
+def _labelize(value: str) -> str:
+    return value.replace("_", " ").replace("-", " ").title()
 
 
 def _float_or_none(value: Any) -> float | None:

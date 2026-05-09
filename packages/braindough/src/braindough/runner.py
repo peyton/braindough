@@ -42,6 +42,7 @@ def run_experiment(spec_path: str | Path, home: str | Path | None = None) -> Pat
         if result.status != "skipped" or result.responses
         else []
     )
+    outputs.extend(result.outputs)
     if result.status != "skipped" or result.responses:
         outputs.extend(
             artifact.write_tables(

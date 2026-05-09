@@ -14,6 +14,7 @@ from braindough.artifacts import (
     validate_artifact,
 )
 from braindough.config import discover_experiment_specs, load_experiment_spec
+from braindough.datasets.bold5000 import BOLD5000Dataset
 from braindough.executive_summary import write_executive_summary
 from braindough.report import write_report
 from braindough.runner import run_experiment
@@ -30,6 +31,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     storage_sub = storage.add_subparsers(dest="storage_command", required=True)
     storage_sub.add_parser("init")
     storage_sub.add_parser("doctor")
+
+    datasets = subparsers.add_parser("datasets")
+    datasets_sub = datasets.add_subparsers(dest="datasets_command", required=True)
+    bold5000 = datasets_sub.add_parser("bold5000")
+    bold5000_sub = bold5000.add_subparsers(dest="bold5000_command", required=True)
+    bold5000_download = bold5000_sub.add_parser("download")
+    bold5000_download.add_argument("--root", type=Path)
+    bold5000_doctor = bold5000_sub.add_parser("doctor")
+    bold5000_doctor.add_argument("--root", type=Path)
 
     run = subparsers.add_parser("run")
     run.add_argument("spec", type=Path)
@@ -71,6 +81,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         return _storage_doctor()
+    if args.command == "datasets" and args.datasets_command == "bold5000":
+        dataset = BOLD5000Dataset(args.root)
+        doctor = (
+            dataset.download()
+            if args.bold5000_command == "download"
+            else dataset.doctor()
+        )
+        print(json.dumps(doctor.to_dict(), indent=2, sort_keys=True))
+        if args.bold5000_command == "doctor":
+            return 0
+        return 0 if doctor.ready else 1
     if args.command == "run":
         run_dir = run_experiment(args.spec, home=args.home)
         print(run_dir)

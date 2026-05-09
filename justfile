@@ -42,6 +42,12 @@ storage-init:
 storage-doctor:
     mise exec -- uv run --python 3.12.13 braindough storage doctor
 
+dataset-bold5000-download:
+    mise exec -- uv run --python 3.12.13 braindough datasets bold5000 download
+
+dataset-bold5000-doctor:
+    mise exec -- uv run --python 3.12.13 braindough datasets bold5000 doctor
+
 run-fake:
     mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_first_suite.yaml
 
@@ -71,6 +77,9 @@ run-tribe-optimizer:
 
 run-tribe-counterfactual:
     mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_counterfactual_editing_workbench.yaml
+
+run-bold5000-real:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/local/bold5000_roi_encoding.yaml
 
 artifact-validate RUN_DIR='':
     run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \

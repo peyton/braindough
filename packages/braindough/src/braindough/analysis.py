@@ -286,11 +286,14 @@ def _correlation(left: np.ndarray, right: np.ndarray) -> float:
         size = min(left.size, right.size)
         left = left[:size]
         right = right[:size]
-    left_std = float(left.std())
-    right_std = float(right.std())
-    if left_std == 0.0 or right_std == 0.0:
+    if left.size < 2 or right.size < 2:
         return 0.0
-    return float(np.corrcoef(left, right)[0, 1])
+    left_centered = left.astype(np.float64) - float(np.mean(left))
+    right_centered = right.astype(np.float64) - float(np.mean(right))
+    denominator = float(np.linalg.norm(left_centered) * np.linalg.norm(right_centered))
+    if denominator < 1e-12:
+        return 0.0
+    return float(np.dot(left_centered, right_centered) / denominator)
 
 
 def _suite_summary(
@@ -302,8 +305,12 @@ def _suite_summary(
             "stimuli": sum(1 for stimulus in stimuli if stimulus.suite == suite),
             "responses": sum(
                 1
-                for stimulus in stimuli
-                if stimulus.suite == suite and stimulus.stimulus_id in responses
+                for response_id in responses
+                if response_id.startswith(f"{suite}:")
+                or any(
+                    stimulus.suite == suite and stimulus.stimulus_id == response_id
+                    for stimulus in stimuli
+                )
             ),
         }
         for suite in suites

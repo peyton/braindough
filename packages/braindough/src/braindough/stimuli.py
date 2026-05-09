@@ -12,6 +12,7 @@ import imageio.v2 as imageio
 import numpy as np
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
+from braindough.datasets.bold5000 import make_bold5000_stimuli
 from braindough.storage import sha256_file, sha256_text
 from braindough.suites import validate_suite_names
 
@@ -92,11 +93,22 @@ def generate_stimuli(
         "virtual_lesion_lab": _virtual_lesion_stimuli,
         "discrete_stimulus_optimizer": _discrete_optimizer_stimuli,
         "counterfactual_editing_workbench": _counterfactual_stimuli,
+        "bold5000_roi_encoding": _bold5000_stimuli,
     }
     for suite in suites:
         stimuli.extend(builders[suite](base_images, output_dir, rng, config))
 
     return stimuli
+
+
+def _bold5000_stimuli(
+    base_images: dict[str, Path],
+    output_dir: Path,
+    rng: np.random.Generator,
+    config: dict[str, Any],
+) -> list[Stimulus]:
+    del base_images, rng
+    return make_bold5000_stimuli(output_dir, config)
 
 
 def _stimulus(

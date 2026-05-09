@@ -182,3 +182,12 @@ Source anchors:
 
 - NSD: https://naturalscenesdataset.org/
 - Algonauts 2023: https://algonautsproject.com/2023/index.html
+
+### BOLD5000 Pixel-Feature Benchmark
+
+The first BOLD5000 adapter lands a Release 1.0 metadata/label-to-ROI benchmark
+because the small Figshare stimuli archive contains presentation lists and
+labels, not raw pixel images. A stronger follow-up should either target
+BOLD5000 Release 2.0 functional data or add a provenance-safe image retrieval
+layer for COCO, ImageNet, and SUN/source-scene stimuli, then compare CLIP, DINO,
+TRIBE-derived features, and metadata baselines on the same ROI split.

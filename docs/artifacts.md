@@ -35,6 +35,12 @@ Each run should write:
           objectives.json
           counterfactual_edits.jsonl
           counterfactual_pairs.csv
+          bold5000_trials.csv
+          bold5000_roi_scores.csv
+          bold5000_model_comparison.csv
+          bold5000_permutation_scores.csv
+          bold5000_feature_weights.csv
+          bold5000_provenance.json
       figures/
         response_similarity.png
         mean_abs_activation.png
@@ -47,6 +53,8 @@ Each run should write:
         optimization_score_components.png
         counterfactual_delta_grid.png
         counterfactual_tradeoff.png
+        bold5000_roi_scores.png
+        bold5000_model_comparison.png
       report.md
       report.html
       executive_summary.pdf
@@ -127,6 +135,20 @@ enough for downstream agents:
   accounting with image-change and response-delta metrics.
 - `outputs/deltas.npz`: parent-child response delta arrays for complete pairs,
   indexed by `outputs/deltas.index.jsonl`.
+- `bold5000_trials.csv`: one row per real BOLD5000 stimulus-list row used by a
+  benchmark run, including subject, trial index, source family, label, and
+  tokenized filename metadata.
+- `bold5000_roi_scores.csv`: validation metrics for each metadata model,
+  subject, ROI, and TR.
+- `bold5000_model_comparison.csv`: the best model per ROI, improvement over the
+  mean baseline, bootstrap interval, and permutation p-value.
+- `bold5000_permutation_scores.csv`: shuffled-label control scores used to
+  contextualize each selected model.
+- `bold5000_feature_weights.csv`: top mean-absolute ridge weights for the best
+  model per ROI.
+- `bold5000_provenance.json`: path-neutral public-data provenance, Release 1.0
+  archive file IDs, source URLs, observed hashes, terms URLs, and benchmark
+  caveats.
 
 ## Provenance Notes
 
@@ -134,6 +156,13 @@ TRIBE v2 predictions are model predictions, not measurements. Figures and CSVs
 must label them as predicted neural responses. When comparing suites, include
 the same model revision and inference settings in every manifest before drawing
 scientific conclusions.
+
+BOLD5000 benchmark runs are different: they use measured public ROI response
+matrices, but the v1 adapter uses BOLD5000 Release 1.0 processed ROI vectors and
+stimulus filenames/labels rather than Release 2.0 GLM outputs or raw pixels.
+Reports must not describe metadata-only scores as CLIP, DINO, TRIBE, or
+image-feature performance, and any significance count must be labeled as
+exploratory and uncorrected.
 
 ## Executive Summary Exports
 
