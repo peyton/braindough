@@ -76,6 +76,9 @@ class Bold5000RidgeBackend:
         tr = str(config.get("tr", DEFAULT_TR))
         trial_limit = int(config.get("trial_limit", 256))
         trial_offset = int(config.get("trial_offset", 0))
+        trial_selection = str(config.get("trial_selection", "first"))
+        trial_seed = int(config.get("trial_seed", spec.seed))
+        split_strategy = str(config.get("split_strategy", "random"))
         validation_fraction = float(config.get("validation_fraction", 0.25))
         hash_features = int(config.get("hash_features", 64))
         alpha_grid = tuple(
@@ -89,23 +92,42 @@ class Bold5000RidgeBackend:
         score_rows: list[dict[str, object]] = []
         comparison_rows: list[dict[str, object]] = []
         permutation_rows: list[dict[str, object]] = []
+        split_rows: list[dict[str, object]] = []
+        leakage_rows: list[dict[str, object]] = []
         weight_rows: list[dict[str, object]] = []
         responses: dict[str, np.ndarray] = {}
         events: list[dict[str, object]] = []
 
         for subject in subjects:
             trials = dataset.load_trials(
-                subject, limit=trial_limit, offset=trial_offset
+                subject,
+                limit=trial_limit,
+                offset=trial_offset,
+                selection=trial_selection,
+                seed=trial_seed,
             )
             if len(trials) < 8:
                 raise ValueError("BOLD5000 benchmark needs at least 8 trials")
             trial_rows.extend(_trial_rows(trials))
-            split = _split_indices(len(trials), validation_fraction, rng)
+            trial_indices = np.array(
+                [trial.trial_index for trial in trials], dtype=np.int64
+            )
+            split = _split_indices(
+                trials,
+                validation_fraction,
+                rng,
+                strategy=split_strategy,
+            )
+            split_rows.extend(_split_rows(subject, tr, trials, split, split_strategy))
+            leakage_rows.extend(_leakage_rows(subject, tr, trials, split))
             feature_sets = _feature_sets(trials, hash_features=hash_features)
             for roi in rois:
-                y = dataset.load_roi_matrix(
-                    subject, roi, tr=tr, limit=trial_limit + trial_offset
-                )[trial_offset : trial_offset + len(trials)]
+                y_all = dataset.load_roi_matrix(subject, roi, tr=tr)
+                if len(trial_indices) and int(np.max(trial_indices)) >= y_all.shape[0]:
+                    raise ValueError(
+                        f"BOLD5000 trial index exceeds {subject} {roi} {tr} rows"
+                    )
+                y = y_all[trial_indices]
                 roi_result = _score_roi(
                     y,
                     split,
@@ -136,12 +158,16 @@ class Bold5000RidgeBackend:
                 )
                 weight_rows.extend(_weight_rows(subject, roi, tr, best, max_rows=10))
 
+        max_statistic_rows = _max_statistic_rows(comparison_rows, permutation_rows)
         outputs = _write_benchmark_outputs(
             run_dir,
             trial_rows=trial_rows,
             score_rows=score_rows,
             comparison_rows=comparison_rows,
             permutation_rows=permutation_rows,
+            split_rows=split_rows,
+            leakage_rows=leakage_rows,
+            max_statistic_rows=max_statistic_rows,
             weight_rows=weight_rows,
             provenance={
                 "dataset": "BOLD5000",
@@ -159,6 +185,9 @@ class Bold5000RidgeBackend:
                 "tr": tr,
                 "trial_limit": trial_limit,
                 "trial_offset": trial_offset,
+                "trial_selection": trial_selection,
+                "trial_seed": trial_seed,
+                "split_strategy": split_strategy,
                 "validation_fraction": validation_fraction,
                 "hash_features": hash_features,
                 "alpha_grid": list(alpha_grid),
@@ -175,8 +204,11 @@ class Bold5000RidgeBackend:
                     "not include raw pixel images."
                 ),
                 "p_value_note": (
-                    "Permutation p-values are exploratory and uncorrected for "
-                    "multiple ROI/model comparisons."
+                    "Per-model permutation p-values are exploratory and "
+                    "uncorrected. The max-statistic p-value is computed from "
+                    "the largest shuffled Pearson value across the searched "
+                    "subject/ROI/model grid. Alpha selection is replayed over "
+                    "the configured alpha grid inside each permutation."
                 ),
             },
         )
@@ -198,6 +230,9 @@ class Bold5000RidgeBackend:
             "tr": tr,
             "trial_limit": trial_limit,
             "trial_offset": trial_offset,
+            "trial_selection": trial_selection,
+            "trial_seed": trial_seed,
+            "split_strategy": split_strategy,
             "validation_fraction": validation_fraction,
             "hash_features": hash_features,
             "alpha_grid": list(alpha_grid),
@@ -205,15 +240,22 @@ class Bold5000RidgeBackend:
             "bootstraps": bootstraps,
             "seed": spec.seed,
             "p_value_note": (
-                "Permutation p-values are exploratory and uncorrected for "
-                "multiple ROI/model comparisons."
+                "Per-model permutation p-values are exploratory and "
+                "uncorrected. The max-statistic p-value compares the observed "
+                "best ROI/model to the largest shuffled Pearson values across "
+                "the searched subject/ROI/model grid. Alpha selection is "
+                "replayed over the configured alpha grid inside each "
+                "permutation."
             ),
             "source_caveat": (
                 "This adapter uses BOLD5000 Release 1.0 processed ROI vectors "
                 "and stimulus name/label metadata, not Release 2.0 GLM outputs "
                 "or raw pixel-image features."
             ),
-            "bold5000_benchmark": _benchmark_summary(comparison_rows),
+            "bold5000_benchmark": _benchmark_summary(
+                comparison_rows,
+                max_statistic_rows=max_statistic_rows,
+            ),
         }
         return BackendResult(
             status="completed",
@@ -258,20 +300,152 @@ def _download_provenance(
 
 
 def _split_indices(
-    n_trials: int, validation_fraction: float, rng: np.random.Generator
+    trials: list[TrialRecord],
+    validation_fraction: float,
+    rng: np.random.Generator,
+    *,
+    strategy: str,
 ) -> Any:
+    n_trials = len(trials)
     validation_count = max(2, min(n_trials - 2, round(n_trials * validation_fraction)))
     indices = np.arange(n_trials)
+    if strategy == "stratified_source":
+        validation: list[int] = []
+        for source in sorted({trial.source_family for trial in trials}):
+            source_indices = np.array(
+                [
+                    index
+                    for index, trial in enumerate(trials)
+                    if trial.source_family == source
+                ],
+                dtype=np.int64,
+            )
+            rng.shuffle(source_indices)
+            source_validation_count = round(len(source_indices) * validation_fraction)
+            source_validation_count = min(len(source_indices), source_validation_count)
+            validation.extend(
+                int(index) for index in source_indices[:source_validation_count]
+            )
+        if len(validation) < validation_count:
+            missing = np.setdiff1d(indices, np.array(validation, dtype=np.int64))
+            rng.shuffle(missing)
+            validation.extend(
+                int(index) for index in missing[: validation_count - len(validation)]
+            )
+        validation_array = np.array(
+            sorted(validation[:validation_count]), dtype=np.int64
+        )
+        train_array = np.setdiff1d(indices, validation_array)
+        return _Split(train=train_array, validation=validation_array)
+    if strategy == "stratified_source_grouped_filename":
+        validation_groups: list[int] = []
+        for source in sorted({trial.source_family for trial in trials}):
+            source_indices = [
+                index
+                for index, trial in enumerate(trials)
+                if trial.source_family == source
+            ]
+            target = max(1, round(len(source_indices) * validation_fraction))
+            groups: dict[str, list[int]] = {}
+            for index in source_indices:
+                groups.setdefault(trials[index].normalized_filename, []).append(index)
+            group_values = list(groups.values())
+            rng.shuffle(group_values)
+            source_validation: list[int] = []
+            for group in group_values:
+                if len(source_validation) >= target:
+                    break
+                source_validation.extend(group)
+            validation_groups.extend(source_validation)
+        validation_array = np.array(sorted(set(validation_groups)), dtype=np.int64)
+        train_array = np.setdiff1d(indices, validation_array)
+        if len(validation_array) < 2 or len(train_array) < 2:
+            raise ValueError("Grouped BOLD5000 split produced too few trials")
+        return _Split(train=train_array, validation=validation_array)
+    if strategy != "random":
+        raise ValueError(
+            "Unknown BOLD5000 split_strategy "
+            f"{strategy!r}; expected 'random', 'stratified_source', or "
+            "'stratified_source_grouped_filename'"
+        )
     rng.shuffle(indices)
-    validation = np.sort(indices[:validation_count])
-    train = np.sort(indices[validation_count:])
-    return _Split(train=train, validation=validation)
+    validation_array = np.sort(indices[:validation_count])
+    train_array = np.sort(indices[validation_count:])
+    return _Split(train=train_array, validation=validation_array)
 
 
 class _Split:
     def __init__(self, train: np.ndarray, validation: np.ndarray) -> None:
         self.train = train
         self.validation = validation
+
+
+def _split_rows(
+    subject: str,
+    tr: str,
+    trials: list[TrialRecord],
+    split: _Split,
+    strategy: str,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for source in sorted({trial.source_family for trial in trials}):
+        train_count = sum(
+            1 for index in split.train if trials[int(index)].source_family == source
+        )
+        validation_count = sum(
+            1
+            for index in split.validation
+            if trials[int(index)].source_family == source
+        )
+        rows.append(
+            {
+                "subject": subject,
+                "tr": tr,
+                "split_strategy": strategy,
+                "source_family": source,
+                "train_count": train_count,
+                "validation_count": validation_count,
+                "total_count": train_count + validation_count,
+            }
+        )
+    return rows
+
+
+def _leakage_rows(
+    subject: str,
+    tr: str,
+    trials: list[TrialRecord],
+    split: _Split,
+) -> list[dict[str, object]]:
+    train_filenames = {trials[int(index)].normalized_filename for index in split.train}
+    validation_filenames = {
+        trials[int(index)].normalized_filename for index in split.validation
+    }
+    train_tokens = {
+        token for index in split.train for token in trials[int(index)].tokens
+    }
+    validation_tokens = {
+        token for index in split.validation for token in trials[int(index)].tokens
+    }
+    crossing_filenames = train_filenames & validation_filenames
+    crossing_repeated = {
+        trial.normalized_filename
+        for trial in trials
+        if trial.repeated and trial.normalized_filename in crossing_filenames
+    }
+    return [
+        {
+            "subject": subject,
+            "tr": tr,
+            "train_trials": len(split.train),
+            "validation_trials": len(split.validation),
+            "train_unique_filenames": len(train_filenames),
+            "validation_unique_filenames": len(validation_filenames),
+            "filenames_crossing_train_validation": len(crossing_filenames),
+            "repeated_filenames_crossing_train_validation": len(crossing_repeated),
+            "tokens_crossing_train_validation": len(train_tokens & validation_tokens),
+        }
+    ]
 
 
 def _feature_sets(
@@ -362,7 +536,7 @@ def _score_roi(
             y_train_z,
             y_val_z,
             split,
-            float(best_score["alpha"]),
+            alpha_grid,
             int(permutations),
             rng,
         )
@@ -413,34 +587,34 @@ def _ridge_fit(x_train: np.ndarray, y_train: np.ndarray, alpha: float) -> np.nda
     design = np.concatenate(
         [np.ones((x_train.shape[0], 1), dtype=np.float32), x_train], axis=1
     )
-    penalty = np.eye(design.shape[1], dtype=np.float32) * np.float32(alpha)
+    return _ridge_solver(design.T @ design, alpha) @ (design.T @ y_train)
+
+
+def _ridge_solver(gram: np.ndarray, alpha: float) -> np.ndarray:
+    penalty = np.eye(gram.shape[0], dtype=np.float32) * np.float32(alpha)
     penalty[0, 0] = 0.0
-    return np.linalg.solve(design.T @ design + penalty, design.T @ y_train)
+    return np.linalg.inv(gram + penalty)
 
 
 def _score_prediction(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    correlations = [
-        _correlation(y_true[:, column], y_pred[:, column])
-        for column in range(y_true.shape[1])
-    ]
+    left = y_true.astype(np.float64)
+    right = y_pred.astype(np.float64)
+    left_centered = left - np.mean(left, axis=0, keepdims=True)
+    right_centered = right - np.mean(right, axis=0, keepdims=True)
+    denominator = np.linalg.norm(left_centered, axis=0) * np.linalg.norm(
+        right_centered, axis=0
+    )
+    numerator = np.sum(left_centered * right_centered, axis=0)
+    correlations = np.zeros(y_true.shape[1], dtype=np.float64)
+    valid = denominator >= 1e-12
+    correlations[valid] = numerator[valid] / denominator[valid]
     residual = float(np.sum((y_true - y_pred) ** 2))
     total = float(np.sum((y_true - y_true.mean(axis=0, keepdims=True)) ** 2))
     return {
-        "pearson_mean": float(np.mean(correlations)) if correlations else 0.0,
-        "pearson_median": float(np.median(correlations)) if correlations else 0.0,
+        "pearson_mean": float(np.mean(correlations)) if correlations.size else 0.0,
+        "pearson_median": float(np.median(correlations)) if correlations.size else 0.0,
         "r2": 1.0 - residual / total if total > 0 else 0.0,
     }
-
-
-def _correlation(left: np.ndarray, right: np.ndarray) -> float:
-    if left.size < 2 or right.size < 2:
-        return 0.0
-    left_centered = left.astype(np.float64) - float(np.mean(left))
-    right_centered = right.astype(np.float64) - float(np.mean(right))
-    denominator = float(np.linalg.norm(left_centered) * np.linalg.norm(right_centered))
-    if denominator < 1e-12:
-        return 0.0
-    return float(np.dot(left_centered, right_centered) / denominator)
 
 
 def _bootstrap_ci(
@@ -464,22 +638,29 @@ def _permutation_scores(
     y_train_z: np.ndarray,
     y_val_z: np.ndarray,
     split: _Split,
-    alpha: float,
+    alpha_grid: tuple[float, ...],
     permutations: int,
     rng: np.random.Generator,
 ) -> list[float]:
+    x_train, x_val, _, _ = _standardize_x(x, split)
+    design_train = _with_intercept(x_train, np.empty((1, 0)), np.empty((1, 0)))
+    design_val = _with_intercept(x_val, np.empty((1, 0)), np.empty((1, 0)))
+    gram = design_train.T @ design_train
+    solvers = [_ridge_solver(gram, alpha) for alpha in alpha_grid]
+    permutation_order = np.arange(design_train.shape[0])
     scores: list[float] = []
     for _ in range(permutations):
-        shuffled = np.array(split.train)
-        rng.shuffle(shuffled)
-        x_perm = np.array(x)
-        x_perm[split.train] = x_perm[shuffled]
-        x_train, x_val, _, _ = _standardize_x(x_perm, split)
-        weights = _ridge_fit(x_train, y_train_z, alpha)
-        prediction = (
-            _with_intercept(x_val, np.empty((1, 0)), np.empty((1, 0))) @ weights
+        rng.shuffle(permutation_order)
+        rhs = design_train[permutation_order].T @ y_train_z
+        scores.append(
+            max(
+                _score_prediction(
+                    y_val_z,
+                    design_val @ (solver @ rhs),
+                )["pearson_mean"]
+                for solver in solvers
+            )
         )
-        scores.append(_score_prediction(y_val_z, prediction)["pearson_mean"])
     return scores
 
 
@@ -559,6 +740,9 @@ def _write_benchmark_outputs(
     score_rows: list[dict[str, object]],
     comparison_rows: list[dict[str, object]],
     permutation_rows: list[dict[str, object]],
+    split_rows: list[dict[str, object]],
+    leakage_rows: list[dict[str, object]],
+    max_statistic_rows: list[dict[str, object]],
     weight_rows: list[dict[str, object]],
     provenance: dict[str, object],
 ) -> list[dict[str, object]]:
@@ -570,12 +754,56 @@ def _write_benchmark_outputs(
         write_csv_rows(
             tables_dir / "bold5000_permutation_scores.csv", permutation_rows
         ),
+        write_csv_rows(tables_dir / "bold5000_split_balance.csv", split_rows),
+        write_csv_rows(
+            tables_dir / "bold5000_leakage_diagnostics.csv",
+            leakage_rows,
+        ),
+        write_csv_rows(
+            tables_dir / "bold5000_max_statistic_permutations.csv",
+            max_statistic_rows,
+        ),
         write_csv_rows(tables_dir / "bold5000_feature_weights.csv", weight_rows),
         write_json_rows(tables_dir / "bold5000_provenance.json", provenance),
     ]
 
 
-def _benchmark_summary(rows: list[dict[str, object]]) -> dict[str, object]:
+def _max_statistic_rows(
+    comparison_rows: list[dict[str, object]],
+    permutation_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    if not comparison_rows or not permutation_rows:
+        return []
+    observed_best = max(
+        _finite_float(row.get("best_pearson_mean")) for row in comparison_rows
+    )
+    by_index: dict[int, float] = {}
+    for row in permutation_rows:
+        index = int(str(row.get("permutation_index", 0)))
+        value = _finite_float(row.get("pearson_mean"))
+        by_index[index] = max(value, by_index.get(index, -math.inf))
+    if not by_index:
+        return []
+    max_values = [value for _, value in sorted(by_index.items())]
+    p_value = (sum(value >= observed_best for value in max_values) + 1) / (
+        len(max_values) + 1
+    )
+    return [
+        {
+            "permutation_index": index,
+            "max_pearson_mean": value,
+            "observed_best_pearson_mean": observed_best,
+            "max_statistic_p": p_value,
+        }
+        for index, value in sorted(by_index.items())
+    ]
+
+
+def _benchmark_summary(
+    rows: list[dict[str, object]],
+    *,
+    max_statistic_rows: list[dict[str, object]],
+) -> dict[str, object]:
     if not rows:
         return {
             "status": "no_scores",
@@ -596,6 +824,10 @@ def _benchmark_summary(rows: list[dict[str, object]]) -> dict[str, object]:
         "best_pearson_mean": best["best_pearson_mean"],
         "best_r2": best["best_r2"],
         "mean_improvement_over_mean": mean_improvement,
+        "max_statistic_p": (
+            max_statistic_rows[0]["max_statistic_p"] if max_statistic_rows else None
+        ),
+        "max_statistic_permutations": len(max_statistic_rows),
         "n_nominally_significant": sum(
             1
             for row in rows

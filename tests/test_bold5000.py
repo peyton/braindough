@@ -53,11 +53,16 @@ def test_bold5000_fixture_run_writes_valid_benchmark_artifact(
                 f"  dataset_root: {dataset.root}",
                 "  subjects: [CSI1]",
                 "  trial_limit: 12",
+                "  trial_selection: random",
+                "  trial_seed: 123",
                 "backend_config:",
                 f"  dataset_root: {dataset.root}",
                 "  subjects: [CSI1]",
                 "  rois: [LHEarlyVis, LHPPA]",
                 "  trial_limit: 12",
+                "  trial_selection: random",
+                "  trial_seed: 123",
+                "  split_strategy: stratified_source",
                 "  validation_fraction: 0.25",
                 "  hash_features: 8",
                 "  alpha_grid: [0.1, 1.0]",
@@ -88,6 +93,9 @@ def test_bold5000_fixture_run_writes_valid_benchmark_artifact(
     assert metrics["dataset_release"] == "release-1.0"
     assert metrics["permutations"] == 4
     assert metrics["bootstraps"] == 8
+    assert metrics["trial_selection"] == "random"
+    assert metrics["split_strategy"] == "stratified_source"
+    assert "max_statistic_p" in metrics["bold5000_benchmark"]
     assert provenance["dataset_release"] == "release-1.0"
     assert provenance["terms"].endswith("/terms.html")
     assert provenance["downloads"]["BOLD5000_ROIs.zip"]["file_id"] == "12965447"
@@ -95,6 +103,13 @@ def test_bold5000_fixture_run_writes_valid_benchmark_artifact(
     assert (run_dir / "outputs" / "tables" / "bold5000_trials.csv").is_file()
     assert (run_dir / "outputs" / "tables" / "bold5000_roi_scores.csv").is_file()
     assert (run_dir / "outputs" / "tables" / "bold5000_model_comparison.csv").is_file()
+    assert (run_dir / "outputs" / "tables" / "bold5000_split_balance.csv").is_file()
+    assert (
+        run_dir / "outputs" / "tables" / "bold5000_leakage_diagnostics.csv"
+    ).is_file()
+    assert (
+        run_dir / "outputs" / "tables" / "bold5000_max_statistic_permutations.csv"
+    ).is_file()
     assert (run_dir / "figures" / "bold5000_roi_scores.png").is_file()
     assert "BOLD5000 Real-Data Benchmark" in report
     assert "Release 1.0" in report

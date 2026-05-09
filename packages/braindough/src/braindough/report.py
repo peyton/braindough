@@ -678,8 +678,18 @@ def _markdown_report(
             f"`{best_bold.get('subject')} {best_bold.get('roi')}` with "
             f"`{best_bold.get('best_model')}` "
             f"(mean voxel Pearson r `{_float_value(best_bold.get('best_pearson_mean'), 0.0):.6f}`, "
+            f"R2 `{_float_value(best_bold.get('best_r2'), 0.0):.6f}`, "
             f"exploratory uncorrected permutation p `{best_bold.get('permutation_p')}`)."
         )
+        benchmark = metrics.get("bold5000_benchmark", {})
+        if isinstance(benchmark, dict) and benchmark.get("max_statistic_p") is not None:
+            lines.append(
+                "- Grid-level max-statistic diagnostic: "
+                f"p `{benchmark.get('max_statistic_p')}` over "
+                f"`{benchmark.get('max_statistic_permutations')}` permutations. "
+                "This is exploratory and is reported to avoid over-interpreting "
+                "the selected best ROI/model."
+            )
         lines.append(
             f"- ROI rows: `{len(bold_rows)}`; trial rows: "
             f"`{len(tables.get('bold5000_trials', []))}`."
@@ -688,7 +698,9 @@ def _markdown_report(
             "- Run context: "
             f"`{release}` processed ROI vectors; subjects `{subjects}`; ROIs `{rois}`; "
             f"trial limit `{metrics.get('trial_limit')}`; trial offset "
-            f"`{metrics.get('trial_offset', 0)}`; validation fraction "
+            f"`{metrics.get('trial_offset', 0)}`; trial selection "
+            f"`{metrics.get('trial_selection', 'first')}`; split strategy "
+            f"`{metrics.get('split_strategy', 'random')}`; validation fraction "
             f"`{metrics.get('validation_fraction')}`; seed `{metrics.get('seed')}`; "
             f"permutations `{metrics.get('permutations')}`; bootstraps "
             f"`{metrics.get('bootstraps')}`."
