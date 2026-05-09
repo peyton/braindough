@@ -18,8 +18,22 @@ External datasets have their own terms. NSD and Algonauts are important
 research anchors, but adapters must not land until their access, citation,
 storage, and redistribution rules are documented in the adapter itself.
 
+BOLD5000 is staged as a public real-data benchmark. The BOLD5000 terms license
+the fMRI dataset under CC0 except for stimulus images and their original
+annotations, which retain upstream terms. The repository may store adapter code,
+fixture data, hashes, and derived metrics, but the Release 1.0 processed ROI
+matrices and stimulus metadata archives still live under `BRAINDOUGH_HOME`.
+The first BOLD5000 benchmark uses ROI response matrices and filenames/labels; it
+does not redistribute raw stimulus images or original annotations. BOLD5000
+Release 2.0 is author-recommended for new functional analyses and is not
+evaluated by the current adapter.
+
 Stable sources:
 
+- BOLD5000: https://bold5000-dataset.github.io/website/
+- BOLD5000 terms: https://bold5000-dataset.github.io/website/terms.html
+- BOLD5000 Figshare: https://figshare.com/articles/dataset/BOLD5000/6459449
+- BOLD5000 Release 2.0 code: https://github.com/BOLD5000-dataset/BOLD5000
 - NSD: https://naturalscenesdataset.org/
 - Algonauts 2023: https://algonautsproject.com/2023/index.html
 

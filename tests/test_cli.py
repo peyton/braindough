@@ -17,6 +17,7 @@ def test_cli_experiments_list(capsys) -> None:  # type: ignore[no-untyped-def]
     assert "local/tribe-v2-virtual-lesion-lab" in output
     assert "local/tribe-v2-discrete-stimulus-optimizer" in output
     assert "local/tribe-v2-counterfactual-editing-workbench" in output
+    assert "local/bold5000-roi-encoding" in output
 
 
 def test_cli_validate_fixture(capsys) -> None:  # type: ignore[no-untyped-def]

@@ -21,6 +21,7 @@ class BackendResult:
     responses: dict[str, np.ndarray] = field(default_factory=dict)
     events: list[dict[str, object]] = field(default_factory=list)
     metrics: dict[str, object] = field(default_factory=dict)
+    outputs: list[dict[str, object]] = field(default_factory=list)
     blocker: str | None = None
 
 

@@ -35,6 +35,7 @@ _LOCAL_PATH_FRAGMENT_RE = re.compile(
 _WINDOWS_PATH_FRAGMENT_RE = re.compile(
     r"(?:[a-zA-Z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+|\\[^\\/]+)[^\n\r\t\"'<>]*"
 )
+_NON_FILE_URL_RE = re.compile(r"\b(?!file://)[a-zA-Z][a-zA-Z0-9+.-]*://[^\s\"'<>]+")
 
 
 def _now() -> str:
@@ -671,6 +672,19 @@ def _required_completed_outputs(manifest: dict[str, Any]) -> set[str]:
                 "figures/counterfactual_tradeoff.png",
             }
         )
+    if "bold5000_roi_encoding" in suites:
+        paths.update(
+            {
+                "outputs/tables/bold5000_trials.csv",
+                "outputs/tables/bold5000_roi_scores.csv",
+                "outputs/tables/bold5000_model_comparison.csv",
+                "outputs/tables/bold5000_permutation_scores.csv",
+                "outputs/tables/bold5000_feature_weights.csv",
+                "outputs/tables/bold5000_provenance.json",
+                "figures/bold5000_roi_scores.png",
+                "figures/bold5000_model_comparison.png",
+            }
+        )
     return paths
 
 
@@ -737,6 +751,7 @@ def _path_token_text(path: str) -> str:
 
 
 def _text_contains_absolute_path(value: str) -> bool:
+    value = _NON_FILE_URL_RE.sub("", value)
     return bool(
         _LOCAL_PATH_FRAGMENT_RE.search(value) or _WINDOWS_PATH_FRAGMENT_RE.search(value)
     )

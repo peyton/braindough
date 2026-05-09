@@ -1,0 +1,33 @@
+id: local/bold5000-roi-encoding
+title: BOLD5000 real ROI metadata encoding benchmark
+backend: bold5000-ridge
+seed: 20260509
+suites:
+  - bold5000_roi_encoding
+stimuli:
+  subjects:
+    - CSI1
+  trial_limit: 384
+  trial_offset: 0
+backend_config:
+  subjects:
+    - CSI1
+  rois:
+    - LHEarlyVis
+    - RHEarlyVis
+    - LHLOC
+    - RHLOC
+    - LHPPA
+    - RHPPA
+  tr: TR1
+  trial_limit: 384
+  trial_offset: 0
+  validation_fraction: 0.25
+  hash_features: 64
+  alpha_grid:
+    - 0.1
+    - 1.0
+    - 10.0
+    - 100.0
+  permutations: 16
+  bootstraps: 64

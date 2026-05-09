@@ -45,6 +45,22 @@ def test_discover_latest_run_dirs_prefers_latest_target_backend(
     assert discovered == [newer, tribe]
 
 
+def test_discover_latest_run_dirs_includes_bold5000_runs(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    bold = _write_run(
+        home,
+        "20260509T010000Z-local-bold5000-roi-encoding-bold5000-ridge",
+        backend="bold5000-ridge",
+        experiment_id="local/bold5000-roi-encoding",
+        n_stimuli=384,
+        n_responses=6,
+    )
+
+    discovered = discover_latest_run_dirs(home=home)
+
+    assert discovered == [bold]
+
+
 def test_write_executive_summary_outputs_pdf_json_sources_and_figures(
     tmp_path: Path,
 ) -> None:
@@ -106,6 +122,33 @@ def test_write_executive_summary_discovers_runs_when_not_explicit(
     findings = " ".join(item["claim"] for item in summary["key_findings"])
     assert "The local TRIBE perturbation/optimization run produced" not in findings
     assert "No tribe-v2 perturbation/optimization run was loaded" in findings
+
+
+def test_write_executive_summary_handles_bold5000_only_run(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_run(
+        home,
+        "20260509T010000Z-local-bold5000-roi-encoding-bold5000-ridge",
+        backend="bold5000-ridge",
+        experiment_id="local/bold5000-roi-encoding",
+        n_stimuli=384,
+        n_responses=6,
+    )
+
+    paths = write_executive_summary(output_dir=tmp_path / "summary", home=home)
+    summary = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
+    markdown = paths["markdown"].read_text(encoding="utf-8")
+
+    assert [run["backend"] for run in summary["runs"]] == ["bold5000-ridge"]
+    assert "BOLD5000 Release 1.0" in summary["scope"]
+    assert "Release 2.0" in markdown
+    assert "exploratory and uncorrected" in markdown
+    chart_paths = {chart["path"] for chart in summary["charts"]}
+    assert "figures/bold5000_roi_scores.png" in chart_paths
+    assert "figures/bold5000_model_comparison.png" in chart_paths
+    source_ids = {source["id"] for source in summary["sources"]}
+    assert "bold5000_download" in source_ids
+    assert "bold5000_terms" in source_ids
 
 
 def test_write_executive_summary_finds_research_metadata_outside_cwd(
@@ -285,8 +328,77 @@ def _write_run(
         "attempted_predictions": n_responses if backend == "tribe-v2" else None,
         "max_predictions": n_responses if backend == "tribe-v2" else None,
     }
+    if backend == "bold5000-ridge":
+        metrics.update(
+            {
+                "suite_summary": {
+                    "bold5000_roi_encoding": {
+                        "stimuli": n_stimuli,
+                        "responses": n_responses,
+                    }
+                },
+                "subjects": ["CSI1"],
+                "rois": ["RHEarlyVis", "LHEarlyVis"],
+                "tr": "TR1",
+                "trial_limit": n_stimuli,
+                "trial_offset": 0,
+                "validation_fraction": 0.25,
+                "seed": 20260509,
+                "permutations": 16,
+                "bootstraps": 64,
+                "dataset_release": "release-1.0",
+                "dataset_release_label": "BOLD5000 Release 1.0",
+                "p_value_note": (
+                    "Permutation p-values are exploratory and uncorrected for "
+                    "multiple ROI/model comparisons."
+                ),
+                "source_caveat": (
+                    "This adapter uses BOLD5000 Release 1.0 processed ROI "
+                    "vectors and stimulus name/label metadata."
+                ),
+                "bold5000_benchmark": {
+                    "status": "completed",
+                    "n_roi_results": 2,
+                    "best_subject": "CSI1",
+                    "best_roi": "RHEarlyVis",
+                    "best_model": "source_family",
+                    "best_pearson_mean": 0.031,
+                    "best_r2": -0.02,
+                    "mean_improvement_over_mean": 0.01,
+                    "n_nominally_significant": 0,
+                },
+                "mean_abs_activation_by_stimulus": {
+                    "bold5000_roi_encoding:CSI1:RHEarlyVis:source_family": 0.03
+                },
+                "n_optimizer_candidates": 0,
+                "n_perturbation_comparisons": 0,
+            }
+        )
     (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    if backend == "bold5000-ridge":
+        (table_dir / "bold5000_model_comparison.csv").write_text(
+            "\n".join(
+                [
+                    "subject,roi,tr,best_model,best_alpha,best_pearson_mean,best_r2,mean_baseline_pearson,improvement_over_mean,bootstrap_low,bootstrap_high,permutation_p",
+                    "CSI1,RHEarlyVis,TR1,source_family,1.0,0.031,-0.02,0.0,0.01,-0.01,0.06,0.25",
+                    "CSI1,LHEarlyVis,TR1,token_hash,10.0,0.02,-0.03,0.0,0.005,-0.02,0.05,0.50",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (table_dir / "bold5000_roi_scores.csv").write_text(
+            "\n".join(
+                [
+                    "subject,roi,tr,model,alpha,feature_count,pearson_mean,pearson_median,r2,bootstrap_low,bootstrap_high,permutation_p",
+                    "CSI1,RHEarlyVis,TR1,source_family,1.0,4,0.031,0.02,-0.02,-0.01,0.06,0.25",
+                    "CSI1,RHEarlyVis,TR1,token_hash,10.0,16,0.01,0.0,-0.04,-0.02,0.03,0.75",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     if include_backend_error_optimizer_row:
         second_row = {
             "step": 1,

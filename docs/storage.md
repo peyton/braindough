@@ -20,6 +20,8 @@ Expected layout:
 - `shared/code/tribe-v2/72399081ed3f1040c4d996cefb2864a4c46f5b8e/`
 - `shared/hf-cache/`
 - `shared/torch-cache/`
+- `datasets/bold5000/figshare-v5/downloads/`
+- `datasets/bold5000/figshare-v5/extracted/`
 - `blobs/sha256/`
 - `worktrees/<sha256-realpath-12>/scratch`
 - `worktrees/<sha256-realpath-12>/tmp`
@@ -52,6 +54,18 @@ A clean checkout should be enough to run small fixture tests:
 Full TRIBE v2 inference may require model weights, TRIBE source, and larger
 local media. The failure mode for missing weights or data should be explicit:
 commands should write a skipped artifact naming the missing path or dependency.
+
+BOLD5000 Release 1.0 data is staged explicitly:
+
+    just dataset-bold5000-download
+    just dataset-bold5000-doctor
+
+The staged archives and extracted HDF5 ROI matrices stay under
+`BRAINDOUGH_HOME/datasets/bold5000/figshare-v5/`. The checked-in experiment
+spec only records the benchmark parameters; it does not vendor participant
+responses or stimulus metadata. `just dataset-bold5000-doctor` is a diagnostic
+and exits successfully even when the data is not staged; inspect its `ready`
+field before running the real benchmark.
 
 ## Retention
 
