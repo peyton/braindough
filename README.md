@@ -43,6 +43,11 @@ skipped artifact with the blocker instead of failing silently.
   benchmark using Release 1.0 ROI matrices and stimulus metadata. BOLD5000
   Release 2.0 is author-recommended for new functional analyses and remains
   future adapter scope.
+- `just run-bold5000-preprint-tr34` and `just run-bold5000-preprint-tr3` run
+  the larger seeded-random BOLD5000 metadata benchmarks used by the preprint
+  workflow.
+- `just run-bold5000-preprint-tr34-grouped-sensitivity` runs a lower-cost
+  grouped-by-filename split sensitivity for repeated-stimulus leakage checks.
 - `just report RUN_DIR=...` rebuilds human-readable reports for an existing run.
 
 See `docs/` for architecture, storage layout, artifact schema, TRIBE v2 notes,

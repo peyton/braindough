@@ -1,0 +1,44 @@
+id: local/bold5000-roi-encoding-preprint-tr34-grouped-sensitivity
+title: BOLD5000 metadata encoding preprint grouped-split sensitivity TR34
+backend: bold5000-ridge
+seed: 20260509
+suites:
+  - bold5000_roi_encoding
+stimuli:
+  subjects:
+    - CSI1
+    - CSI2
+    - CSI3
+    - CSI4
+  trial_limit: 1024
+  trial_offset: 0
+  trial_selection: random
+  trial_seed: 20260509
+backend_config:
+  subjects:
+    - CSI1
+    - CSI2
+    - CSI3
+    - CSI4
+  rois:
+    - LHEarlyVis
+    - RHEarlyVis
+    - LHLOC
+    - RHLOC
+    - LHPPA
+    - RHPPA
+  tr: TR34
+  trial_limit: 1024
+  trial_offset: 0
+  trial_selection: random
+  trial_seed: 20260509
+  split_strategy: stratified_source_grouped_filename
+  validation_fraction: 0.25
+  hash_features: 64
+  alpha_grid:
+    - 0.1
+    - 1.0
+    - 10.0
+    - 100.0
+  permutations: 100
+  bootstraps: 128

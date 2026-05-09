@@ -81,6 +81,15 @@ run-tribe-counterfactual:
 run-bold5000-real:
     mise exec -- uv run --python 3.12.13 braindough run experiments/local/bold5000_roi_encoding.yaml
 
+run-bold5000-preprint-tr34:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/local/bold5000_roi_encoding_preprint_tr34.yaml
+
+run-bold5000-preprint-tr3:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/local/bold5000_roi_encoding_preprint_tr3.yaml
+
+run-bold5000-preprint-tr34-grouped-sensitivity:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/local/bold5000_roi_encoding_preprint_tr34_grouped_sensitivity.yaml
+
 artifact-validate RUN_DIR='':
     run_dir="{{RUN_DIR}}"; run_dir="${run_dir#RUN_DIR=}"; \
         if [ -n "$run_dir" ]; then \
@@ -107,3 +116,6 @@ executive-summary RUN_DIRS='' OUTPUT_DIR='':
         fi; \
         if [ -n "$output_dir" ]; then set -- "$@" --output-dir "$output_dir"; fi; \
         mise exec -- uv run --python 3.12.13 braindough executive-summary "$@"
+
+preprint-build PREPRINT_DIR:
+    cd "{{PREPRINT_DIR}}" && mise exec -- tectonic main.tex

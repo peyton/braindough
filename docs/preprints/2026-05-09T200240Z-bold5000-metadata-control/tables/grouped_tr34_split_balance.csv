@@ -1,0 +1,13 @@
+source_family,split_strategy,subject,total_count,tr,train_count,validation_count
+coco,stratified_source_grouped_filename,CSI1,426,TR34,320,106
+imagenet,stratified_source_grouped_filename,CSI1,397,TR34,298,99
+scene,stratified_source_grouped_filename,CSI1,201,TR34,151,50
+coco,stratified_source_grouped_filename,CSI2,404,TR34,303,101
+imagenet,stratified_source_grouped_filename,CSI2,397,TR34,298,99
+scene,stratified_source_grouped_filename,CSI2,223,TR34,167,56
+coco,stratified_source_grouped_filename,CSI3,427,TR34,320,107
+imagenet,stratified_source_grouped_filename,CSI3,405,TR34,304,101
+scene,stratified_source_grouped_filename,CSI3,192,TR34,144,48
+coco,stratified_source_grouped_filename,CSI4,401,TR34,301,100
+imagenet,stratified_source_grouped_filename,CSI4,408,TR34,306,102
+scene,stratified_source_grouped_filename,CSI4,215,TR34,161,54

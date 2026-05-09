@@ -1,0 +1,5 @@
+filenames_crossing_train_validation,repeated_filenames_crossing_train_validation,subject,tokens_crossing_train_validation,tr,train_trials,train_unique_filenames,validation_trials,validation_unique_filenames
+0,0,CSI1,107,TR34,769,758,255,248
+0,0,CSI2,100,TR34,768,745,256,246
+0,0,CSI3,131,TR34,768,752,256,245
+0,0,CSI4,110,TR34,768,749,256,247

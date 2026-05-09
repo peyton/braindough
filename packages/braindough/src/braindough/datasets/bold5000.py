@@ -210,7 +210,13 @@ class BOLD5000Dataset:
         )
 
     def load_trials(
-        self, subject: str, *, limit: int | None = None, offset: int = 0
+        self,
+        subject: str,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        selection: str = "first",
+        seed: int = 0,
     ) -> list[TrialRecord]:
         """Read stimulus-list rows for one BOLD5000 subject."""
 
@@ -226,12 +232,21 @@ class BOLD5000Dataset:
             for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
             if line.strip()
         ]
-        selected = lines[offset : offset + limit if limit else None]
+        indices = _select_trial_indices(
+            total=len(lines),
+            limit=limit,
+            offset=offset,
+            selection=selection,
+            seed=seed,
+            subject=subject,
+        )
         image_labels = self._imagenet_labels()
         scene_labels = self._scene_labels()
         return [
-            _trial_record(subject, offset + index, filename, image_labels, scene_labels)
-            for index, filename in enumerate(selected)
+            _trial_record(
+                subject, int(index), lines[int(index)], image_labels, scene_labels
+            )
+            for index in indices
         ]
 
     def load_roi_matrix(
@@ -261,6 +276,8 @@ class BOLD5000Dataset:
         subjects: tuple[str, ...] = DEFAULT_SUBJECTS,
         trial_limit: int = 64,
         offset: int = 0,
+        selection: str = "first",
+        trial_seed: int = 0,
     ) -> list[Any]:
         """Create inspectable label-card stimuli for real BOLD5000 trials."""
 
@@ -275,7 +292,13 @@ class BOLD5000Dataset:
             ]
         stimuli: list[Stimulus] = []
         for subject in subjects:
-            for trial in self.load_trials(subject, limit=trial_limit, offset=offset):
+            for trial in self.load_trials(
+                subject,
+                limit=trial_limit,
+                offset=offset,
+                selection=selection,
+                seed=trial_seed,
+            ):
                 card_path = (
                     output_dir / SUITE / subject / f"trial-{trial.trial_index:05d}.png"
                 )
@@ -374,11 +397,15 @@ def make_bold5000_stimuli(
     subjects = tuple(str(item) for item in config.get("subjects", DEFAULT_SUBJECTS))
     trial_limit = int(config.get("trial_limit", 64))
     offset = int(config.get("trial_offset", 0))
+    selection = str(config.get("trial_selection", "first"))
+    trial_seed = int(config.get("trial_seed", 0))
     return dataset.make_stimuli(
         output_dir,
         subjects=subjects,
         trial_limit=trial_limit,
         offset=offset,
+        selection=selection,
+        trial_seed=trial_seed,
     )
 
 
@@ -478,6 +505,35 @@ def _subject_stim_list_id(subject: str) -> str:
     if not match:
         return subject
     return f"CSI0{match.group(1)}"
+
+
+def _select_trial_indices(
+    *,
+    total: int,
+    limit: int | None,
+    offset: int,
+    selection: str,
+    seed: int,
+    subject: str,
+) -> np.ndarray:
+    if offset < 0:
+        raise ValueError("BOLD5000 trial offset must be non-negative")
+    available = np.arange(min(offset, total), total, dtype=np.int64)
+    count = len(available) if limit is None else min(max(0, limit), len(available))
+    normalized = selection.strip().lower()
+    if normalized in {"first", "sequential"}:
+        return available[:count]
+    if normalized == "random":
+        rng = np.random.default_rng(seed + _stable_int(subject))
+        return np.sort(rng.choice(available, size=count, replace=False))
+    raise ValueError(
+        f"Unknown BOLD5000 trial_selection {selection!r}; expected 'first' or 'random'"
+    )
+
+
+def _stable_int(value: str) -> int:
+    digest = hashlib.sha256(value.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "little")
 
 
 def _trial_record(
