@@ -1,0 +1,65 @@
+{
+  "attempted_predictions": 1,
+  "attempted_predictions_by_suite": {
+    "image_activation": 1
+  },
+  "backend": "tribe-v2",
+  "checkpoint": "facebook/tribev2",
+  "device_attempts": [
+    "mps",
+    "cpu"
+  ],
+  "latent_components": {
+    "n_components": 0,
+    "status": "insufficient_samples"
+  },
+  "max_predictions": 1,
+  "max_predictions_by_suite": null,
+  "max_predictions_per_suite": null,
+  "mean_abs_activation": 0.10267022870072628,
+  "mean_abs_activation_by_stimulus": {
+    "image_activation:color_gradient:static": 0.10267022870072628
+  },
+  "n_counterfactual_pairs": 0,
+  "n_lesion_comparisons": 0,
+  "n_optimizer_candidates": 0,
+  "n_perturbation_comparisons": 27,
+  "n_responses": 1,
+  "n_stimuli": 39,
+  "pairwise_correlation_max": null,
+  "pairwise_correlation_mean": null,
+  "pairwise_correlation_min": null,
+  "prediction_errors": [],
+  "responses_by_suite": {
+    "image_activation": 1
+  },
+  "schema_version": "braindough.artifact.v1",
+  "suite_summary": {
+    "audio_controls": {
+      "responses": 0,
+      "stimuli": 4
+    },
+    "image_activation": {
+      "responses": 1,
+      "stimuli": 3
+    },
+    "temporalization": {
+      "responses": 0,
+      "stimuli": 9
+    },
+    "visual_controls": {
+      "responses": 0,
+      "stimuli": 5
+    },
+    "visual_perturbations": {
+      "responses": 0,
+      "stimuli": 18
+    }
+  },
+  "top_activation_stimuli": [
+    {
+      "mean_abs_activation": 0.10267022870072628,
+      "stimulus_id": "image_activation:color_gradient:static"
+    }
+  ]
+}

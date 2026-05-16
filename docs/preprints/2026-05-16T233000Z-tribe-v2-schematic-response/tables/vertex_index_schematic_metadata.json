@@ -1,0 +1,35 @@
+{
+  "schema_version": "braindough.vertex_index_schematic.v0",
+  "schematic_type": "fsaverage5_vertex_index_schematic",
+  "source_response": "outputs/responses.npz",
+  "stimulus_id": "image_activation:color_gradient:static",
+  "response_shape": [
+    2,
+    20484
+  ],
+  "activation_measure": "mean absolute predicted response across retained TRIBE segments",
+  "assumptions": [
+    "TRIBE v2 response vector is treated as fsaverage5-like 20484 vertices.",
+    "The vector is split into two 10242-vertex hemispheres for diagrammatic projection.",
+    "No fsaverage5 surface-coordinate file or ROI atlas was present in this run/cache, so this is not anatomical ROI registration."
+  ],
+  "left_hemisphere": {
+    "vertex_index_range": [
+      0,
+      10241
+    ],
+    "mean_abs_activation": 0.10272832959890366,
+    "max_abs_activation": 1.0018408298492432
+  },
+  "right_hemisphere": {
+    "vertex_index_range": [
+      10242,
+      20483
+    ],
+    "mean_abs_activation": 0.10261212289333344,
+    "max_abs_activation": 1.0784590244293213
+  },
+  "figure": "figures/tribe_brain_schematic.png",
+  "quantile_vmin": 0.006216889247298241,
+  "quantile_vmax": 0.781989574432373
+}
