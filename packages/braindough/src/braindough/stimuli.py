@@ -22,6 +22,88 @@ VIDEO_SECONDS = 2
 AUDIO_RATE = 16_000
 AUDIO_SECONDS = 2
 
+_FUS_TARGETS: dict[str, dict[str, Any]] = {
+    "S1": {
+        "label": "S1",
+        "network": "somatosensory",
+        "task_family": "somatosensory-discrimination",
+        "schematic_xy": (0.42, 0.42),
+        "control_xy": (0.72, 0.38),
+    },
+    "hMT_plus": {
+        "label": "hMT+",
+        "network": "visual-motion",
+        "task_family": "visual-motion",
+        "schematic_xy": (0.68, 0.52),
+        "control_xy": (0.36, 0.66),
+    },
+    "M1": {
+        "label": "M1",
+        "network": "motor",
+        "task_family": "motor-excitability",
+        "schematic_xy": (0.50, 0.34),
+        "control_xy": (0.78, 0.60),
+    },
+    "rIFG": {
+        "label": "rIFG",
+        "network": "response-inhibition",
+        "task_family": "cognitive-control",
+        "schematic_xy": (0.74, 0.48),
+        "control_xy": (0.30, 0.46),
+    },
+}
+
+_FUS_PROTOCOLS: dict[str, dict[str, Any]] = {
+    "active_low_duty": {
+        "condition": "active",
+        "software_dose_index": 0.35,
+        "virtual_duty_cycle_bins": 0.25,
+        "virtual_burst_count": 2,
+        "virtual_envelope": [0, 1, 0, 0, 1, 0, 0, 0],
+        "sham_mode": "none",
+        "nominal_center_frequency_mhz": "",
+        "nominal_prf_hz": "",
+        "nominal_duty_cycle": "",
+        "nominal_sonication_seconds": "",
+    },
+    "active_mid_duty": {
+        "condition": "active",
+        "software_dose_index": 0.7,
+        "virtual_duty_cycle_bins": 0.5,
+        "virtual_burst_count": 4,
+        "virtual_envelope": [0, 1, 0, 1, 0, 1, 0, 1],
+        "sham_mode": "none",
+        "nominal_center_frequency_mhz": "",
+        "nominal_prf_hz": "",
+        "nominal_duty_cycle": "",
+        "nominal_sonication_seconds": "",
+    },
+    "sham_transmit_blocked": {
+        "condition": "sham",
+        "software_dose_index": 0.0,
+        "virtual_duty_cycle_bins": 0.0,
+        "virtual_burst_count": 0,
+        "virtual_envelope": [0, 0, 0, 0, 0, 0, 0, 0],
+        "sham_mode": "transmit-blocked coupling-pad proxy",
+        "nominal_center_frequency_mhz": "",
+        "nominal_prf_hz": "",
+        "nominal_duty_cycle": "",
+        "nominal_sonication_seconds": "",
+    },
+    "spatial_control": {
+        "condition": "spatial_control",
+        "software_dose_index": 0.35,
+        "virtual_duty_cycle_bins": 0.25,
+        "virtual_burst_count": 2,
+        "virtual_envelope": [0, 1, 0, 0, 1, 0, 0, 0],
+        "sham_mode": "off-target control proxy",
+        "nominal_center_frequency_mhz": "",
+        "nominal_prf_hz": "",
+        "nominal_duty_cycle": "",
+        "nominal_sonication_seconds": "",
+    },
+}
+
 
 @dataclass(frozen=True)
 class Stimulus:
@@ -93,6 +175,7 @@ def generate_stimuli(
         "virtual_lesion_lab": _virtual_lesion_stimuli,
         "discrete_stimulus_optimizer": _discrete_optimizer_stimuli,
         "counterfactual_editing_workbench": _counterfactual_stimuli,
+        "focused_ultrasound_bridge": _focused_ultrasound_bridge_stimuli,
         "bold5000_roi_encoding": _bold5000_stimuli,
     }
     for suite in suites:
@@ -584,6 +667,232 @@ def _counterfactual_stimuli(
     return stimuli
 
 
+def _focused_ultrasound_bridge_stimuli(
+    base_images: dict[str, Path],
+    output_dir: Path,
+    rng: np.random.Generator,
+    config: dict[str, Any],
+) -> list[Stimulus]:
+    del rng
+    stimuli: list[Stimulus] = []
+    base_count = _config_int(
+        config, "focused_ultrasound_base_count", default=1, limit=4
+    )
+    target_ids = _known_config_list(
+        config,
+        "focused_ultrasound_targets",
+        known=_FUS_TARGETS,
+        default=["S1", "hMT_plus"],
+    )
+    protocol_ids = _known_config_list(
+        config,
+        "focused_ultrasound_protocols",
+        known=_FUS_PROTOCOLS,
+        default=[
+            "active_low_duty",
+            "active_mid_duty",
+            "sham_transmit_blocked",
+            "spatial_control",
+        ],
+    )
+    suite_dir = output_dir / "focused_ultrasound_bridge"
+
+    for base_id, image_path in list(base_images.items())[:base_count]:
+        source = Image.open(image_path).convert("RGB")
+        for target_id in target_ids:
+            target = _FUS_TARGETS[target_id]
+            pair_id = f"{base_id}:{target_id}"
+            baseline_id = f"focused_ultrasound_bridge:{base_id}:{target_id}:baseline"
+            baseline_path = suite_dir / f"{base_id}-{target_id}-baseline.png"
+            baseline_protocol = _baseline_fus_protocol()
+            _save_image(
+                _focused_ultrasound_card(source, target, baseline_protocol),
+                baseline_path,
+            )
+            baseline_video = baseline_path.with_suffix(".mp4")
+            _write_static_video(baseline_path, baseline_video)
+            stimuli.append(
+                _stimulus(
+                    stimulus_id=baseline_id,
+                    suite="focused_ultrasound_bridge",
+                    modality="video",
+                    kind="baseline",
+                    path=baseline_video,
+                    duration=VIDEO_SECONDS,
+                    source_image=baseline_path,
+                    metadata=_fus_metadata(
+                        base_id=base_id,
+                        pair_id=pair_id,
+                        target_id=target_id,
+                        target=target,
+                        protocol_id="baseline",
+                        protocol=baseline_protocol,
+                        parent_id="",
+                        source_image_sha256="",
+                    ),
+                )
+            )
+            baseline_sha = sha256_file(baseline_path)
+            for protocol_id in protocol_ids:
+                protocol = _FUS_PROTOCOLS[protocol_id]
+                card_path = suite_dir / f"{base_id}-{target_id}-{protocol_id}.png"
+                _save_image(
+                    _focused_ultrasound_card(source, target, protocol),
+                    card_path,
+                )
+                video_path = card_path.with_suffix(".mp4")
+                _write_static_video(card_path, video_path)
+                stimuli.append(
+                    _stimulus(
+                        stimulus_id=(
+                            "focused_ultrasound_bridge:"
+                            f"{base_id}:{target_id}:{protocol_id}"
+                        ),
+                        suite="focused_ultrasound_bridge",
+                        modality="video",
+                        kind=protocol_id,
+                        path=video_path,
+                        duration=VIDEO_SECONDS,
+                        source_image=card_path,
+                        metadata=_fus_metadata(
+                            base_id=base_id,
+                            pair_id=pair_id,
+                            target_id=target_id,
+                            target=target,
+                            protocol_id=protocol_id,
+                            protocol=protocol,
+                            parent_id=baseline_id,
+                            source_image_sha256=baseline_sha,
+                        ),
+                    )
+                )
+    return stimuli
+
+
+def _baseline_fus_protocol() -> dict[str, Any]:
+    return {
+        "condition": "baseline",
+        "software_dose_index": 0.0,
+        "virtual_duty_cycle_bins": 0.0,
+        "virtual_burst_count": 0,
+        "virtual_envelope": [0, 0, 0, 0, 0, 0, 0, 0],
+        "sham_mode": "none",
+        "nominal_center_frequency_mhz": "",
+        "nominal_prf_hz": "",
+        "nominal_duty_cycle": "",
+        "nominal_sonication_seconds": "",
+    }
+
+
+def _fus_metadata(
+    *,
+    base_id: str,
+    pair_id: str,
+    target_id: str,
+    target: dict[str, Any],
+    protocol_id: str,
+    protocol: dict[str, Any],
+    parent_id: str,
+    source_image_sha256: str,
+) -> dict[str, Any]:
+    condition = str(protocol["condition"])
+    role = "fus_protocol_baseline" if condition == "baseline" else "fus_protocol_proxy"
+    metadata: dict[str, Any] = {
+        "base_id": base_id,
+        "pair_id": pair_id,
+        "parent_id": parent_id,
+        "role": role,
+        "intervention_family": "focused_ultrasound_protocol_proxy",
+        "target_id": target_id,
+        "target_label": target["label"],
+        "target_network": target["network"],
+        "task_family": target["task_family"],
+        "target_coordinate_space": "schematic_2d_head",
+        "target_coordinate": list(target["schematic_xy"]),
+        "protocol_id": protocol_id,
+        "condition": condition,
+        "software_dose_index": protocol["software_dose_index"],
+        "virtual_duty_cycle_bins": protocol["virtual_duty_cycle_bins"],
+        "virtual_burst_count": protocol["virtual_burst_count"],
+        "virtual_envelope": protocol["virtual_envelope"],
+        "sham_mode": protocol["sham_mode"],
+        "acoustic_modeling_status": "not_modeled",
+        "safety_claim": "software_proxy_no_sonication_or_clinical_claim",
+        "source_image_sha256": source_image_sha256,
+        "itrusst_reporting_status": "synthetic_proxy_fields_only",
+        "nominal_center_frequency_mhz": protocol["nominal_center_frequency_mhz"],
+        "nominal_prf_hz": protocol["nominal_prf_hz"],
+        "nominal_duty_cycle": protocol["nominal_duty_cycle"],
+        "nominal_sonication_seconds": protocol["nominal_sonication_seconds"],
+        "estimated_in_situ_pressure_mpa": "",
+        "estimated_in_situ_ispta_mw_cm2": "",
+        "mechanical_index": "",
+        "thermal_index": "",
+        "transducer_model": "not_applicable",
+        "drive_system": "not_applicable",
+        "primary_source_anchors": [
+            "https://arxiv.org/abs/2402.10027",
+            "https://www.nature.com/articles/s43586-024-00368-6",
+            "https://www.nature.com/articles/nn.3620",
+            "https://www.nature.com/articles/s41467-026-69853-8",
+        ],
+    }
+    if condition == "spatial_control":
+        metadata["target_coordinate"] = list(target["control_xy"])
+        metadata["control_target_label"] = f"{target['label']}_off_target"
+    return metadata
+
+
+def _focused_ultrasound_card(
+    source: Image.Image, target: dict[str, Any], protocol: dict[str, Any]
+) -> Image.Image:
+    source = source.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
+    canvas = Image.blend(
+        source,
+        Image.new("RGB", (IMAGE_SIZE, IMAGE_SIZE), (248, 249, 250)),
+        alpha=0.38,
+    )
+    draw = ImageDraw.Draw(canvas)
+    condition = str(protocol["condition"])
+    dose = _metadata_float(protocol["software_dose_index"], default=0.0)
+    color = {
+        "active": (220, 70, 70),
+        "sham": (80, 88, 100),
+        "spatial_control": (220, 150, 55),
+        "baseline": (55, 110, 170),
+    }.get(condition, (80, 88, 100))
+    coordinate = (
+        target["control_xy"]
+        if condition == "spatial_control"
+        else target["schematic_xy"]
+    )
+    x = int(float(coordinate[0]) * IMAGE_SIZE)
+    y = int(float(coordinate[1]) * IMAGE_SIZE)
+
+    draw.rounded_rectangle((14, 14, 242, 242), radius=10, outline=color, width=3)
+    draw.ellipse((46, 42, 210, 196), outline=(42, 48, 56), width=3)
+    draw.line((128, 42, 128, 196), fill=(42, 48, 56), width=1)
+    draw.line((72, 70, 184, 168), fill=(90, 96, 105), width=1)
+    draw.ellipse((x - 14, y - 14, x + 14, y + 14), outline=color, width=4)
+    draw.line((x - 22, y, x + 22, y), fill=color, width=2)
+    draw.line((x, y - 22, x, y + 22), fill=color, width=2)
+
+    pulse_left = 42
+    pulse_top = 210
+    pulse_count = 1 if condition == "baseline" else max(2, int(2 + 6 * dose))
+    for idx in range(pulse_count):
+        left = pulse_left + idx * 24
+        height = 8 + int(18 * max(dose, 0.1))
+        draw.rectangle(
+            (left, pulse_top - height, left + 10, pulse_top),
+            fill=color,
+        )
+    draw.line((36, pulse_top, 220, pulse_top), fill=(42, 48, 56), width=1)
+    draw.text((24, 24), "FUS proxy", fill=(20, 24, 28))
+    draw.text((24, 224), f"{target['label']} {condition}", fill=(20, 24, 28))
+    return canvas
+
+
 def _load_or_create_base_images(
     output_dir: Path, rng: np.random.Generator, config: dict[str, Any]
 ) -> dict[str, Path]:
@@ -967,6 +1276,18 @@ def _config_list(config: dict[str, Any], key: str, *, default: list[str]) -> lis
     return list(raw) or list(default)
 
 
+def _known_config_list(
+    config: dict[str, Any],
+    key: str,
+    *,
+    known: dict[str, Any],
+    default: list[str],
+) -> list[str]:
+    requested = _config_list(config, key, default=default)
+    filtered = [item for item in requested if item in known]
+    return filtered or list(default)
+
+
 def _config_float_list(
     config: dict[str, Any], key: str, *, default: list[float]
 ) -> list[float]:
@@ -980,6 +1301,15 @@ def _config_float_list(
         except (TypeError, ValueError):
             continue
     return values or list(default)
+
+
+def _metadata_float(value: object, *, default: float) -> float:
+    if isinstance(value, int | float | str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
 
 
 def _stable_hash(payload: dict[str, Any]) -> str:

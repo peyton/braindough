@@ -90,9 +90,11 @@ Command:
     just run-fake-lesion
     just run-fake-optimizer
     just run-fake-counterfactual
+    just run-fake-focused-ultrasound
     just run-tribe-lesion
     just run-tribe-optimizer
     just run-tribe-counterfactual
+    just run-tribe-focused-ultrasound
 
 Acceptance: outputs include `latent_components.csv`, `latent_loadings.csv`, and
 an `insufficient_samples` component row when fewer than two predictions are
@@ -126,6 +128,29 @@ Acceptance: every edit has parent/pair metadata, and pair deltas appear in the
 common perturbation comparison table plus `counterfactual_edits.jsonl` and
 `counterfactual_pairs.csv`, including edit magnitude metrics and incomplete-pair
 status for bounded TRIBE runs.
+
+### `focused_ultrasound_bridge`
+
+Purpose: bridge the existing perturbation, sham-control, and bounded TRIBE
+artifact machinery to focused-ultrasound neuromodulation planning without
+pretending Braindough simulates ultrasound physics. The suite creates synthetic
+protocol cards that pair baseline stimuli with active, transmit-blocked sham,
+and spatial-control metadata. The protocol metadata follows the shape of
+focused-ultrasound reporting checklists, but fields that require real acoustic
+measurement or modeling remain explicitly blank and labeled `not_modeled`.
+
+Command:
+
+    just run-fake-focused-ultrasound
+    just run-tribe-focused-ultrasound
+
+Acceptance: outputs include `focused_ultrasound_protocols.csv`,
+`focused_ultrasound_comparisons.csv`, delta arrays, a protocol contact sheet,
+software-dose proxy figure, and report text that states this is a synthetic
+protocol/provenance bridge only. The fake backend may apply deterministic
+metadata-conditioned response deltas for software validation. TRIBE v2 output,
+when run, is a response to the generated visual protocol cards, not a prediction
+of human response to sonication.
 
 ## Deferred Ideas
 

@@ -1,0 +1,13 @@
+{
+  "created_at": "2026-05-17T01:21:05Z",
+  "id": "focused_ultrasound_bridge",
+  "prompt": "Use ChatGPT Extended Pro to plan and critique a focused-ultrasound bridge for Braindough, a public Python uv/mise/hk/just monorepo for local in-silico neuroscience experiments using Meta/Facebook TRIBE v2. Heavy models/cache/scratch live under BRAINDOUGH_HOME; CI must use a deterministic fake backend; local TRIBE runs must be bounded. Propose a concrete repo-implementable experiment that does not claim real sonication, acoustic simulation, safety, clinical efficacy, or causal human neuromodulation. Include conceptual framing, stimulus/control conditions, metadata fields, derived tables/metrics/figures, acceptance tests, safety/claim limitations, now-vs-deferred scope, primary-source anchors, and failure modes.",
+  "source": {
+    "capture_method": "Browser submitted and captured a ChatGPT Extended Pro planning response; local implementation treats it as advisory and verifies anchors separately.",
+    "model_selector": "Extended Pro",
+    "tool": "Browser",
+    "url": "https://chatgpt.com/c/6a09174e-4b1c-83e8-a2e1-56b77e30bc10"
+  },
+  "status": "completed",
+  "title": "ChatGPT Extended Pro: focused_ultrasound_bridge"
+}

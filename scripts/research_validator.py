@@ -23,6 +23,7 @@ REQUIRED_IDS = {
     "virtual_lesion_lab",
     "discrete_stimulus_optimizer",
     "counterfactual_editing_workbench",
+    "focused_ultrasound_bridge",
 }
 
 

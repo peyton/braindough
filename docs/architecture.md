@@ -89,6 +89,10 @@ through TRIBE v2:
   a mean-absolute-response objective plus a diversity penalty.
 - `counterfactual_editing_workbench`: compare paired base/edit stimuli with
   stable parent and pair metadata.
+- `focused_ultrasound_bridge`: encode focused-ultrasound-inspired target,
+  active, sham, and spatial-control protocol metadata as synthetic stimulus
+  cards. This is a protocol/provenance bridge only; it does not model acoustic
+  propagation, perform sonication, or claim clinical or causal neuromodulation.
 
 Command surface:
 
@@ -97,9 +101,11 @@ Command surface:
     just run-fake-lesion
     just run-fake-optimizer
     just run-fake-counterfactual
+    just run-fake-focused-ultrasound
     just run-tribe-lesion
     just run-tribe-optimizer
     just run-tribe-counterfactual
+    just run-tribe-focused-ultrasound
 
 All four suites use the same artifact contract. New sidecar tables live under
 `outputs/tables/` and remain small enough to commit only as generated run
@@ -147,11 +153,13 @@ The implementation should expose these repo-local commands:
     just run-fake-lesion
     just run-fake-optimizer
     just run-fake-counterfactual
+    just run-fake-focused-ultrasound
     just run-tribe
     just run-tribe-optimization
     just run-tribe-lesion
     just run-tribe-optimizer
     just run-tribe-counterfactual
+    just run-tribe-focused-ultrasound
     just dataset-bold5000-download
     just dataset-bold5000-doctor
     just run-bold5000-real

@@ -1,0 +1,27 @@
+id: local/tribe-v2-focused-ultrasound-bridge
+title: TRIBE v2 focused ultrasound bridge
+backend: tribe-v2
+seed: 20260517
+suites:
+  - focused_ultrasound_bridge
+stimuli:
+  focused_ultrasound_base_count: 1
+  focused_ultrasound_targets:
+    - S1
+  focused_ultrasound_protocols:
+    - active_low_duty
+    - sham_transmit_blocked
+    - spatial_control
+backend_config:
+  checkpoint: facebook/tribev2
+  model_ref: facebook/tribev2
+  max_predictions: 4
+  max_predictions_by_suite:
+    focused_ultrasound_bridge: 4
+  event_duration_seconds: 50.0
+  config_update:
+    data.num_workers: 0
+    data.batch_size: 1
+    data.video_feature.image.batch_size: 1
+output:
+  report: true

@@ -144,6 +144,11 @@ def test_focused_fake_experiment_runs_write_suite_artifacts(tmp_path: Path) -> N
             "counterfactual_pairs.csv",
             "counterfactual_tradeoff.png",
         ),
+        (
+            "experiments/smoke/fake_focused_ultrasound_bridge.yaml",
+            "focused_ultrasound_comparisons.csv",
+            "focused_ultrasound_protocol_effects.png",
+        ),
     ]
 
     for spec, table, figure in specs:
@@ -153,6 +158,33 @@ def test_focused_fake_experiment_runs_write_suite_artifacts(tmp_path: Path) -> N
         assert (run_dir / "outputs" / "tables" / table).is_file()
         assert (run_dir / "figures" / figure).is_file()
         assert (run_dir / "executive_summary.pdf").is_file()
+
+
+def test_focused_ultrasound_fake_run_writes_protocol_artifacts(tmp_path: Path) -> None:
+    run_dir = run_experiment(
+        "experiments/smoke/fake_focused_ultrasound_bridge.yaml",
+        home=tmp_path / "braindough-home",
+    )
+
+    assert not validate_artifact(run_dir)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    table_dir = run_dir / "outputs" / "tables"
+    protocols = (table_dir / "focused_ultrasound_protocols.csv").read_text(
+        encoding="utf-8"
+    )
+    comparisons = (table_dir / "focused_ultrasound_comparisons.csv").read_text(
+        encoding="utf-8"
+    )
+    report = (run_dir / "report.md").read_text(encoding="utf-8")
+
+    assert metrics["n_focused_ultrasound_comparisons"] == 8
+    assert "synthetic_proxy_fields_only" in protocols
+    assert "software_proxy_no_sonication_or_clinical_claim" in protocols
+    assert "active_low_duty" in comparisons
+    assert "## Focused Ultrasound Bridge" in report
+    assert (run_dir / "outputs" / "deltas.npz").is_file()
+    assert (run_dir / "figures" / "focused_ultrasound_contact_sheet.png").is_file()
+    assert (run_dir / "figures" / "focused_ultrasound_dose_proxy.png").is_file()
 
 
 def test_validate_requires_suite_specific_outputs(tmp_path: Path) -> None:

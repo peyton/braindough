@@ -223,6 +223,58 @@ def test_latent_components_report_insufficient_samples() -> None:
     assert tables["latent_loadings"] == []
 
 
+def test_focused_ultrasound_tables_preserve_proxy_limitations() -> None:
+    parent = _stimulus(
+        "focused_ultrasound_bridge:base:S1:baseline",
+        "focused_ultrasound_bridge",
+        {
+            "pair_id": "base:S1",
+            "target_label": "S1",
+            "target_network": "somatosensory",
+            "protocol_id": "baseline",
+            "condition": "baseline",
+            "software_dose_index": 0.0,
+            "acoustic_modeling_status": "not_modeled",
+            "safety_claim": "software_proxy_no_sonication_or_clinical_claim",
+            "itrusst_reporting_status": "synthetic_proxy_fields_only",
+        },
+    )
+    active = _stimulus(
+        "focused_ultrasound_bridge:base:S1:active_low_duty",
+        "focused_ultrasound_bridge",
+        {
+            "parent_id": parent.stimulus_id,
+            "pair_id": "base:S1",
+            "target_label": "S1",
+            "target_network": "somatosensory",
+            "protocol_id": "active_low_duty",
+            "condition": "active",
+            "software_dose_index": 0.35,
+            "sham_mode": "none",
+            "acoustic_modeling_status": "not_modeled",
+            "safety_claim": "software_proxy_no_sonication_or_clinical_claim",
+            "itrusst_reporting_status": "synthetic_proxy_fields_only",
+            "nominal_prf_hz": 100,
+        },
+    )
+    responses = {
+        parent.stimulus_id: np.array([[1.0, 2.0, 3.0]], dtype=np.float32),
+        active.stimulus_id: np.array([[1.1, 2.2, 3.6]], dtype=np.float32),
+    }
+
+    tables = build_derived_tables([parent, active], responses)
+
+    protocols = tables["focused_ultrasound_protocols"]
+    comparisons = tables["focused_ultrasound_comparisons"]
+    assert len(protocols) == 2
+    assert protocols[1]["itrusst_reporting_status"] == "synthetic_proxy_fields_only"
+    assert protocols[1]["acoustic_modeling_status"] == "not_modeled"
+    assert comparisons[0]["complete_pair"] is True
+    assert comparisons[0]["condition"] == "active"
+    assert comparisons[0]["software_dose_index"] == 0.35
+    assert comparisons[0]["normalized_l2_delta"] > 0
+
+
 def _stimulus(stimulus_id: str, suite: str, metadata: dict[str, object]) -> Stimulus:
     return Stimulus(
         stimulus_id=stimulus_id,
