@@ -67,6 +67,9 @@ def derived_metrics(
         "n_optimizer_candidates": len(tables["optimization_history"]),
         "n_lesion_comparisons": len(tables["lesion_comparisons"]),
         "n_counterfactual_pairs": len(tables["counterfactual_pairs"]),
+        "n_focused_ultrasound_comparisons": len(
+            tables["focused_ultrasound_comparisons"]
+        ),
     }
     objectives = build_objectives_summary(tables["optimization_history"])
     if objectives:
@@ -107,6 +110,10 @@ def build_derived_tables(
         ),
         "counterfactual_edits": _counterfactual_edit_rows(stimuli),
         "counterfactual_pairs": _counterfactual_pair_rows(stimuli, responses),
+        "focused_ultrasound_protocols": _focused_ultrasound_protocol_rows(stimuli),
+        "focused_ultrasound_comparisons": _focused_ultrasound_comparison_rows(
+            stimuli, responses
+        ),
         **_latent_component_rows(stimuli, responses),
     }
 
@@ -474,6 +481,99 @@ def _counterfactual_pair_rows(
                 "mean_rgb_l2": stimulus.metadata.get("mean_rgb_l2", ""),
                 "edge_change_score": stimulus.metadata.get("edge_change_score", ""),
                 "minimality_ratio": _minimality_ratio(row, stimulus),
+            }
+        )
+        rows.append(row)
+    return rows
+
+
+def _focused_ultrasound_protocol_rows(stimuli: list[Stimulus]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for stimulus in stimuli:
+        if stimulus.suite != "focused_ultrasound_bridge":
+            continue
+        rows.append(
+            {
+                "stimulus_id": stimulus.stimulus_id,
+                "parent_id": stimulus.metadata.get("parent_id", ""),
+                "base_id": stimulus.metadata.get("base_id", ""),
+                "pair_id": stimulus.metadata.get("pair_id", ""),
+                "target_id": stimulus.metadata.get("target_id", ""),
+                "target_label": stimulus.metadata.get("target_label", ""),
+                "target_network": stimulus.metadata.get("target_network", ""),
+                "task_family": stimulus.metadata.get("task_family", ""),
+                "target_coordinate_space": stimulus.metadata.get(
+                    "target_coordinate_space", ""
+                ),
+                "target_coordinate": stimulus.metadata.get("target_coordinate", ""),
+                "protocol_id": stimulus.metadata.get("protocol_id", ""),
+                "condition": stimulus.metadata.get("condition", ""),
+                "software_dose_index": stimulus.metadata.get("software_dose_index", ""),
+                "virtual_duty_cycle_bins": stimulus.metadata.get(
+                    "virtual_duty_cycle_bins", ""
+                ),
+                "virtual_burst_count": stimulus.metadata.get("virtual_burst_count", ""),
+                "virtual_envelope": stimulus.metadata.get("virtual_envelope", ""),
+                "sham_mode": stimulus.metadata.get("sham_mode", ""),
+                "acoustic_modeling_status": stimulus.metadata.get(
+                    "acoustic_modeling_status", ""
+                ),
+                "safety_claim": stimulus.metadata.get("safety_claim", ""),
+                "itrusst_reporting_status": stimulus.metadata.get(
+                    "itrusst_reporting_status", ""
+                ),
+                "nominal_center_frequency_mhz": stimulus.metadata.get(
+                    "nominal_center_frequency_mhz", ""
+                ),
+                "nominal_prf_hz": stimulus.metadata.get("nominal_prf_hz", ""),
+                "nominal_duty_cycle": stimulus.metadata.get("nominal_duty_cycle", ""),
+                "nominal_sonication_seconds": stimulus.metadata.get(
+                    "nominal_sonication_seconds", ""
+                ),
+                "estimated_in_situ_pressure_mpa": stimulus.metadata.get(
+                    "estimated_in_situ_pressure_mpa", ""
+                ),
+                "estimated_in_situ_ispta_mw_cm2": stimulus.metadata.get(
+                    "estimated_in_situ_ispta_mw_cm2", ""
+                ),
+                "mechanical_index": stimulus.metadata.get("mechanical_index", ""),
+                "thermal_index": stimulus.metadata.get("thermal_index", ""),
+                "transducer_model": stimulus.metadata.get("transducer_model", ""),
+                "drive_system": stimulus.metadata.get("drive_system", ""),
+                "source_image_sha256": stimulus.metadata.get("source_image_sha256", ""),
+                "sha256": stimulus.sha256,
+            }
+        )
+    return rows
+
+
+def _focused_ultrasound_comparison_rows(
+    stimuli: list[Stimulus], responses: dict[str, np.ndarray]
+) -> list[dict[str, Any]]:
+    by_id = {stimulus.stimulus_id: stimulus for stimulus in stimuli}
+    rows: list[dict[str, Any]] = []
+    for stimulus in stimuli:
+        parent_id = str(stimulus.metadata.get("parent_id", ""))
+        if stimulus.suite != "focused_ultrasound_bridge" or not parent_id:
+            continue
+        row = _comparison_row(stimulus, parent_id, by_id, responses)
+        row.update(
+            {
+                "target_id": stimulus.metadata.get("target_id", ""),
+                "target_label": stimulus.metadata.get("target_label", ""),
+                "target_network": stimulus.metadata.get("target_network", ""),
+                "protocol_id": stimulus.metadata.get("protocol_id", ""),
+                "condition": stimulus.metadata.get("condition", ""),
+                "software_dose_index": stimulus.metadata.get("software_dose_index", ""),
+                "virtual_duty_cycle_bins": stimulus.metadata.get(
+                    "virtual_duty_cycle_bins", ""
+                ),
+                "virtual_burst_count": stimulus.metadata.get("virtual_burst_count", ""),
+                "sham_mode": stimulus.metadata.get("sham_mode", ""),
+                "acoustic_modeling_status": stimulus.metadata.get(
+                    "acoustic_modeling_status", ""
+                ),
+                "safety_claim": stimulus.metadata.get("safety_claim", ""),
             }
         )
         rows.append(row)

@@ -42,6 +42,7 @@ class FakeBackend:
             if parent_id in responses and stimulus.suite in {
                 "virtual_lesion_lab",
                 "counterfactual_editing_workbench",
+                "focused_ultrasound_bridge",
             }:
                 response = self._paired_response(
                     stimulus=stimulus,
@@ -89,6 +90,7 @@ class FakeBackend:
             "virtual_lesion_lab": 0.52,
             "discrete_stimulus_optimizer": 0.62,
             "counterfactual_editing_workbench": 0.56,
+            "focused_ultrasound_bridge": 0.5,
         }.get(stimulus.suite, 0.35)
         modality_offset = 0.2 if stimulus.modality == "audio" else 0.0
         temporal = np.linspace(0.2, 1.0, timesteps, dtype=np.float32)[:, None]
@@ -115,9 +117,22 @@ class FakeBackend:
         kind = str(
             stimulus.metadata.get("lesion_base_type")
             or stimulus.metadata.get("edit_base_type")
+            or stimulus.metadata.get("condition")
             or stimulus.kind
         )
         strength = _metadata_float(stimulus.metadata.get("strength", 1.0), default=1.0)
+        if stimulus.suite == "focused_ultrasound_bridge":
+            strength = _metadata_float(
+                stimulus.metadata.get("software_dose_index", 0.0), default=0.0
+            )
+            scale = {
+                "baseline": 0.0,
+                "sham": 0.012,
+                "spatial_control": 0.045,
+                "active": 0.08 + 0.12 * max(strength, 0.0),
+            }.get(kind, 0.04)
+            delta = fallback - np.mean(fallback, dtype=np.float32)
+            return (parent + delta * np.float32(scale)).astype(np.float32)
         scale = {
             "sham_reencode": 0.01,
             "low_contrast": 0.04,

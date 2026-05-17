@@ -12,11 +12,13 @@ def test_cli_experiments_list(capsys) -> None:  # type: ignore[no-untyped-def]
     assert "smoke/fake-virtual-lesion-lab" in output
     assert "smoke/fake-discrete-stimulus-optimizer" in output
     assert "smoke/fake-counterfactual-editing-workbench" in output
+    assert "smoke/fake-focused-ultrasound-bridge" in output
     assert "local/tribe-v2-first-suite" in output
     assert "local/tribe-v2-perturbation-optimization" in output
     assert "local/tribe-v2-virtual-lesion-lab" in output
     assert "local/tribe-v2-discrete-stimulus-optimizer" in output
     assert "local/tribe-v2-counterfactual-editing-workbench" in output
+    assert "local/tribe-v2-focused-ultrasound-bridge" in output
     assert "local/bold5000-roi-encoding" in output
 
 

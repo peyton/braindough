@@ -1,0 +1,21 @@
+id: smoke/fake-focused-ultrasound-bridge
+title: Fake backend focused ultrasound bridge
+backend: fake
+seed: 20260517
+suites:
+  - focused_ultrasound_bridge
+stimuli:
+  focused_ultrasound_base_count: 1
+  focused_ultrasound_targets:
+    - S1
+    - hMT_plus
+  focused_ultrasound_protocols:
+    - active_low_duty
+    - active_mid_duty
+    - sham_transmit_blocked
+    - spatial_control
+backend_config:
+  vertices: 64
+  timesteps: 5
+output:
+  report: true

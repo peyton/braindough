@@ -144,6 +144,43 @@ def test_counterfactual_config_records_edit_magnitude(tmp_path: Path) -> None:
     assert edits[0].metadata["semantic_class"] == "low_level"
 
 
+def test_focused_ultrasound_bridge_records_protocol_metadata(tmp_path: Path) -> None:
+    stimuli = generate_stimuli(
+        suites=("focused_ultrasound_bridge",),
+        output_dir=tmp_path,
+        seed=123,
+        config={
+            "focused_ultrasound_base_count": 1,
+            "focused_ultrasound_targets": ["S1"],
+            "focused_ultrasound_protocols": [
+                "active_low_duty",
+                "sham_transmit_blocked",
+            ],
+        },
+    )
+
+    baseline = next(stimulus for stimulus in stimuli if stimulus.kind == "baseline")
+    active = next(
+        stimulus for stimulus in stimuli if stimulus.kind == "active_low_duty"
+    )
+    sham = next(
+        stimulus for stimulus in stimuli if stimulus.kind == "sham_transmit_blocked"
+    )
+
+    assert len(stimuli) == 3
+    assert all(stimulus.path.is_file() for stimulus in stimuli)
+    assert active.metadata["parent_id"] == baseline.stimulus_id
+    assert active.metadata["intervention_family"] == "focused_ultrasound_protocol_proxy"
+    assert active.metadata["target_label"] == "S1"
+    assert active.metadata["acoustic_modeling_status"] == "not_modeled"
+    assert active.metadata["estimated_in_situ_pressure_mpa"] == ""
+    assert active.metadata["nominal_center_frequency_mhz"] == ""
+    assert active.metadata["virtual_burst_count"] == 2
+    assert active.metadata["software_dose_index"] > 0
+    assert sham.metadata["condition"] == "sham"
+    assert "coupling-pad" in sham.metadata["sham_mode"]
+
+
 def test_generate_stimuli_rejects_unknown_suite(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Unknown experiment suite"):
         generate_stimuli(

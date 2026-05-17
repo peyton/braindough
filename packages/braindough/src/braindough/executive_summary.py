@@ -446,6 +446,7 @@ def _limitations() -> list[str]:
         "Current perturbations are generated controls, not validated perceptual minimal edits.",
         "Closed-loop optimization can exploit model priors unless held-out benchmarks are used.",
         "Virtual lesions are stimulus-factor lesions, not internal model-layer ablations.",
+        "Focused-ultrasound bridge runs are synthetic protocol/provenance proxies, not acoustic simulations, safety evaluations, real sonication, or causal human neuromodulation evidence.",
         "Audiovisual conclusions require controlled congruent and incongruent stimulus sets.",
         "Run artifacts need empirical benchmark adapters before biological claims are warranted.",
     ]
@@ -491,6 +492,14 @@ def _future_directions() -> list[dict[str, str]]:
             "next_step": (
                 "Constrain stimulus search with held-out controls, diversity penalties, "
                 "and preregistered stopping criteria before longer optimization runs."
+            ),
+        },
+        {
+            "phase": "Phase 5",
+            "title": "Focused-ultrasound protocol bridge",
+            "next_step": (
+                "Use protocol/sham metadata and explicit claim-scope checks before "
+                "considering any separate validated acoustic-simulation adapter."
             ),
         },
     ]
@@ -1089,6 +1098,20 @@ def _literature_sources() -> list[dict[str, str]]:
             "url": "https://distill.pub/2017/feature-visualization/",
             "kind": "technical_article",
             "relevance": "Activation-maximization and interpretability caveats for optimizers.",
+        },
+        {
+            "id": "itrusst_reporting",
+            "title": "ITRUSST Consensus on Standardised Reporting for Transcranial Ultrasound Stimulation",
+            "url": "https://arxiv.org/abs/2402.10027",
+            "kind": "paper",
+            "relevance": "Reporting-field anchor for focused-ultrasound protocol metadata and explicit out-of-scope acoustic fields.",
+        },
+        {
+            "id": "lifu_human_primer",
+            "title": "Low-intensity focused ultrasound for human neuromodulation",
+            "url": "https://www.nature.com/articles/s43586-024-00368-6",
+            "kind": "paper",
+            "relevance": "Human LIFU methods and limitation anchor for protocol-bridge wording.",
         },
     ]
 

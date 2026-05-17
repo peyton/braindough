@@ -33,6 +33,8 @@ def test_discover_experiment_specs() -> None:
     assert Path("experiments/local/tribe_v2_first_suite.yaml") in specs
     assert Path("experiments/smoke/fake_perturbation_optimization.yaml") in specs
     assert Path("experiments/local/tribe_v2_perturbation_optimization.yaml") in specs
+    assert Path("experiments/smoke/fake_focused_ultrasound_bridge.yaml") in specs
+    assert Path("experiments/local/tribe_v2_focused_ultrasound_bridge.yaml") in specs
 
 
 def test_load_perturbation_optimization_spec() -> None:
@@ -46,6 +48,15 @@ def test_load_perturbation_optimization_spec() -> None:
         "discrete_stimulus_optimizer",
         "counterfactual_editing_workbench",
     )
+
+
+def test_load_focused_ultrasound_bridge_spec() -> None:
+    spec = load_experiment_spec("experiments/smoke/fake_focused_ultrasound_bridge.yaml")
+
+    assert spec.experiment_id == "smoke/fake-focused-ultrasound-bridge"
+    assert spec.backend == "fake"
+    assert spec.suites == ("focused_ultrasound_bridge",)
+    assert spec.stimuli["focused_ultrasound_targets"] == ["S1", "hMT_plus"]
 
 
 def test_unknown_suite_is_rejected(tmp_path: Path) -> None:

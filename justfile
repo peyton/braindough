@@ -31,7 +31,7 @@ test:
 
 check: fmt-check lint typecheck test artifact-validate research-validate
 
-ci: bootstrap check run-fake run-fake-optimization run-fake-lesion run-fake-optimizer run-fake-counterfactual
+ci: bootstrap check run-fake run-fake-optimization run-fake-lesion run-fake-optimizer run-fake-counterfactual run-fake-focused-ultrasound
 
 doctor:
     mise exec -- uv run --python 3.12.13 braindough doctor
@@ -63,6 +63,9 @@ run-fake-optimizer:
 run-fake-counterfactual:
     mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_counterfactual_editing_workbench.yaml
 
+run-fake-focused-ultrasound:
+    mise exec -- uv run --python 3.12.13 braindough run experiments/smoke/fake_focused_ultrasound_bridge.yaml
+
 run-tribe:
     mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_first_suite.yaml
 
@@ -77,6 +80,9 @@ run-tribe-optimizer:
 
 run-tribe-counterfactual:
     mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_counterfactual_editing_workbench.yaml
+
+run-tribe-focused-ultrasound:
+    mise exec -- uv run --python 3.12.13 --package braindough --extra tribe braindough run experiments/local/tribe_v2_focused_ultrasound_bridge.yaml
 
 run-bold5000-real:
     mise exec -- uv run --python 3.12.13 braindough run experiments/local/bold5000_roi_encoding.yaml

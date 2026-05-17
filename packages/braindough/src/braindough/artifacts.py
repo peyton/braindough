@@ -180,6 +180,8 @@ class RunArtifact:
             "latent_components",
             "latent_loadings",
             "counterfactual_pairs",
+            "focused_ultrasound_protocols",
+            "focused_ultrasound_comparisons",
         ]
         for table_name in csv_table_names:
             path = tables_dir / f"{table_name}.csv"
@@ -218,7 +220,12 @@ class RunArtifact:
     ) -> list[dict[str, Any]]:
         arrays, index_rows = build_delta_arrays(stimuli, responses)
         requires_delta_artifact = any(
-            stimulus.suite in {"virtual_lesion_lab", "counterfactual_editing_workbench"}
+            stimulus.suite
+            in {
+                "virtual_lesion_lab",
+                "counterfactual_editing_workbench",
+                "focused_ultrasound_bridge",
+            }
             for stimulus in stimuli
         )
         if not arrays and not requires_delta_artifact:
@@ -670,6 +677,18 @@ def _required_completed_outputs(manifest: dict[str, Any]) -> set[str]:
                 "outputs/tables/counterfactual_pairs.csv",
                 "figures/counterfactual_delta_grid.png",
                 "figures/counterfactual_tradeoff.png",
+            }
+        )
+    if "focused_ultrasound_bridge" in suites:
+        paths.update(
+            {
+                "outputs/deltas.npz",
+                "outputs/deltas.index.jsonl",
+                "outputs/tables/focused_ultrasound_protocols.csv",
+                "outputs/tables/focused_ultrasound_comparisons.csv",
+                "figures/focused_ultrasound_contact_sheet.png",
+                "figures/focused_ultrasound_protocol_effects.png",
+                "figures/focused_ultrasound_dose_proxy.png",
             }
         )
     if "bold5000_roi_encoding" in suites:

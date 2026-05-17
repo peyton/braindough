@@ -157,6 +157,7 @@ def _write_figures(
         figures.extend(_write_optimizer_figures(root, manifest, optimization_rows))
     figures.extend(_write_lesion_figures(root, manifest, tables))
     figures.extend(_write_counterfactual_figures(root, manifest, tables))
+    figures.extend(_write_focused_ultrasound_figures(root, manifest, tables))
     return figures
 
 
@@ -436,6 +437,84 @@ def _write_counterfactual_figures(
     return figures
 
 
+def _write_focused_ultrasound_figures(
+    root: Path, manifest: dict[str, Any], tables: dict[str, Any]
+) -> list[Path]:
+    figures: list[Path] = []
+    if not _manifest_has_suite(manifest, "focused_ultrasound_bridge"):
+        return figures
+    rows = [
+        row
+        for row in tables.get("focused_ultrasound_comparisons", [])
+        if row.get("complete_pair") in {"True", True}
+    ]
+    figures_dir = root / "figures"
+    contact = _write_contact_sheet(
+        root,
+        manifest,
+        suite="focused_ultrasound_bridge",
+        filename="focused_ultrasound_contact_sheet.png",
+        title="Focused ultrasound protocol proxies",
+    )
+    if contact:
+        figures.append(contact)
+
+    if rows:
+        labels = [
+            f"{row.get('target_label')} {row.get('protocol_id')}" for row in rows[:20]
+        ]
+        deltas = [
+            _float_value(row.get("normalized_l2_delta"), 0.0) for row in rows[:20]
+        ]
+        fig, ax = plt.subplots(figsize=(max(6, len(labels) * 0.45), 4))
+        ax.bar(range(len(deltas)), deltas, color="#2d98da")
+        ax.set_title("Focused ultrasound proxy response deltas")
+        ax.set_ylabel("normalized L2 response delta")
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=90, fontsize=7)
+        fig.tight_layout()
+        path = figures_dir / "focused_ultrasound_protocol_effects.png"
+        fig.savefig(path, dpi=150)
+        plt.close(fig)
+        figures.append(path)
+
+        dose_rows = [
+            row
+            for row in rows
+            if _float_or_none(row.get("software_dose_index")) is not None
+        ]
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.scatter(
+            [_float_value(row.get("software_dose_index"), 0.0) for row in dose_rows],
+            [_float_value(row.get("normalized_l2_delta"), 0.0) for row in dose_rows],
+            color="#20bf6b",
+        )
+        ax.set_title("Software dose proxy vs response delta")
+        ax.set_xlabel("software dose index")
+        ax.set_ylabel("normalized L2 response delta")
+        fig.tight_layout()
+        path = figures_dir / "focused_ultrasound_dose_proxy.png"
+        fig.savefig(path, dpi=150)
+        plt.close(fig)
+        figures.append(path)
+    else:
+        figures.append(
+            _write_no_data_figure(
+                figures_dir / "focused_ultrasound_protocol_effects.png",
+                "Focused ultrasound proxy response deltas",
+                "No complete focused-ultrasound proxy pairs were available.",
+            )
+        )
+        figures.append(
+            _write_no_data_figure(
+                figures_dir / "focused_ultrasound_dose_proxy.png",
+                "Software dose proxy vs response delta",
+                "No complete focused-ultrasound proxy pairs were available.",
+            )
+        )
+    return figures
+
+
 def _write_contact_sheet(
     root: Path,
     manifest: dict[str, Any],
@@ -636,6 +715,31 @@ def _markdown_report(
             f"`{top_counterfactual.get('stimulus_id')}` "
             f"(normalized L2 `{_float_value(top_counterfactual.get('normalized_l2_delta'), 0.0):.6f}`)."
         )
+
+    lines.extend(["", "## Focused Ultrasound Bridge", ""])
+    fus_rows = tables.get("focused_ultrasound_comparisons", [])
+    fus_complete = [
+        row for row in fus_rows if row.get("complete_pair") in {"True", True}
+    ]
+    protocol_rows = tables.get("focused_ultrasound_protocols", [])
+    lines.append(
+        f"- Protocol proxies: `{len(protocol_rows)}` stimuli, "
+        f"`{len(fus_complete)}` complete paired comparisons."
+    )
+    if fus_complete:
+        top_fus = max(
+            fus_complete,
+            key=lambda row: abs(_float_value(row.get("normalized_l2_delta"), 0.0)),
+        )
+        lines.append(
+            "- Largest focused-ultrasound proxy delta: "
+            f"`{top_fus.get('stimulus_id')}` "
+            f"(normalized L2 `{_float_value(top_fus.get('normalized_l2_delta'), 0.0):.6f}`)."
+        )
+    lines.append(
+        "- Interpretation: synthetic protocol/provenance bridge only; no acoustic "
+        "propagation, real sonication, clinical effect, or causal neuromodulation claim."
+    )
 
     lines.extend(["", "## Latent Components", ""])
     latent_rows = tables.get("latent_components", [])

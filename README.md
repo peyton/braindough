@@ -48,6 +48,11 @@ skipped artifact with the blocker instead of failing silently.
   workflow.
 - `just run-bold5000-preprint-tr34-grouped-sensitivity` runs a lower-cost
   grouped-by-filename split sensitivity for repeated-stimulus leakage checks.
+- `just run-fake-focused-ultrasound` runs a CI-safe focused-ultrasound protocol
+  bridge that stores synthetic target/sham metadata without claiming acoustic
+  modeling or real sonication.
+- `just run-tribe-focused-ultrasound` runs the same bridge through a bounded
+  local TRIBE v2 budget.
 - `just report RUN_DIR=...` rebuilds human-readable reports for an existing run.
 
 See `docs/` for architecture, storage layout, artifact schema, TRIBE v2 notes,
